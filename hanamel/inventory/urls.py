@@ -11,4 +11,5 @@ urlpatterns = [
     path("sales/<int:pk>/invoice/", views.sale_invoice, name="sale_invoice"),
     path("reports/", views.reports, name="reports"),
     path("reports/<int:year>/<int:month>/export/", views.export_month, name="export_month"),
+    path("reports/<int:year>/<int:month>/invoices/", views.invoice_pack, name="invoice_pack"),
 ]

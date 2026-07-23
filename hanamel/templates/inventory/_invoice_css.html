@@ -1,0 +1,37 @@
+.doc{background:#fff;border:1px solid var(--rule);border-radius:var(--r);
+  padding:34px 38px;max-width:800px;margin:0 auto}
+.doc-head{display:flex;justify-content:space-between;gap:24px;
+  border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:22px}
+.biz-name{font-size:1.35rem;font-weight:700;letter-spacing:-.01em;margin:0 0 6px}
+.biz-meta{font-size:.82rem;color:var(--ink-soft);line-height:1.6}
+.doc-kind{text-align:right;flex:none}
+.doc-kind .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.doc-kind .no{font-family:var(--mono);font-size:1.25rem;font-weight:600;margin-top:3px}
+.doc-kind .dt{font-size:.8rem;color:var(--ink-soft);margin-top:5px}
+.bill{margin-bottom:20px}
+.bill .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
+.bill .v{font-weight:600}
+.doc table{width:100%;border-collapse:collapse;margin-bottom:4px}
+.doc th{background:#F4F8F6;font-size:.64rem}
+.doc td,.doc th{padding:9px 10px}
+.sums{margin-left:auto;width:280px;margin-top:14px}
+.sums div{display:flex;justify-content:space-between;padding:7px 10px;font-size:.9rem}
+.sums .grand{border-top:2px solid var(--ink);font-family:var(--mono);
+  font-weight:600;font-size:1.15rem;padding-top:11px}
+.sums .owing{color:var(--oxide);font-weight:600}
+.paidmark{display:inline-block;border:2px solid var(--mark);color:var(--mark);
+  font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.14em;
+  padding:5px 12px;border-radius:2px;transform:rotate(-3deg)}
+.foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--rule);
+  font-size:.78rem;color:var(--ink-soft);line-height:1.6}
+.actions{max-width:800px;margin:0 auto 18px;display:flex;gap:10px;justify-content:flex-end}
+
+@media print{
+  .topbar,.actions,.noprint{display:none!important}
+  body{background:#fff}
+  .wrap{padding:0;max-width:none}
+  .doc{border:none;padding:0;max-width:none;box-shadow:none}
+  @page{margin:14mm}
+}

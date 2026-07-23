@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Product, Sale
+from .models import Product, Sale, SaleItem
 
 
 class TimberMathTests(TestCase):
@@ -179,3 +179,115 @@ class PaymentAndInvoiceTests(TestCase):
     def test_export_of_an_empty_month_still_works(self):
         r = self.client.get(reverse("export_month", args=[2020, 1]))
         self.assertEqual(r.status_code, 200)
+
+
+class MonthBoundaryTests(TestCase):
+    """A sale just after local midnight must land in the right month."""
+
+    def setUp(self):
+        User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+        self.product = Product.objects.create(
+            type=Product.FINISHED, name="Door frame",
+            price=Decimal("8500"), stock_qty=Decimal("99"))
+
+    def _sale_at(self, when):
+        """`when` is wall-clock time in the yard (Nairobi), pinned explicitly so
+        this test is independent of the TIME_ZONE setting."""
+        from zoneinfo import ZoneInfo
+        sale = Sale.objects.create(number=f"SAL-X-{when:%Y%m%d%H%M}",
+                                   date=when.replace(tzinfo=ZoneInfo("Africa/Nairobi")))
+        SaleItem.objects.create(sale=sale, product=self.product,
+                                qty=Decimal("1"), rate=Decimal("8500"))
+        sale.recalculate_total()
+        return sale
+
+    def test_sale_just_after_midnight_belongs_to_the_new_month(self):
+        import io
+        from datetime import datetime
+        import openpyxl
+
+        self._sale_at(datetime(2026, 8, 1, 1, 0))    # 1am EAT on the 1st
+        self._sale_at(datetime(2026, 7, 31, 23, 0))  # 11pm EAT on the 31st
+
+        def numbers_in(year, month):
+            r = self.client.get(reverse("export_month", args=[year, month]))
+            wb = openpyxl.load_workbook(io.BytesIO(r.content))
+            ws = wb["Sales"]
+            return [row[1] for row in ws.iter_rows(min_row=5, values_only=True)
+                    if row[1] and str(row[1]).startswith("SAL-X")]
+
+        self.assertEqual(len(numbers_in(2026, 7)), 1, "July should hold only the 31st sale")
+        self.assertEqual(len(numbers_in(2026, 8)), 1, "August should hold the 1am sale")
+
+
+class InvoicePackTests(TestCase):
+    def setUp(self):
+        User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+        self.product = Product.objects.create(
+            type=Product.FINISHED, name="Door frame",
+            price=Decimal("8500"), stock_qty=Decimal("99"))
+
+    def _sale(self, number, when):
+        from zoneinfo import ZoneInfo
+        sale = Sale.objects.create(
+            number=number, customer_name="Kamau Hardware",
+            date=when.replace(tzinfo=ZoneInfo("Africa/Nairobi")))
+        SaleItem.objects.create(sale=sale, product=self.product,
+                                qty=Decimal("2"), rate=Decimal("8500"))
+        sale.recalculate_total()
+        return sale
+
+    def test_pack_shows_every_invoice_for_the_month(self):
+        from datetime import datetime
+        self._sale("SAL-2026-0101", datetime(2026, 9, 3, 10, 0))
+        self._sale("SAL-2026-0102", datetime(2026, 9, 20, 16, 0))
+        self._sale("SAL-2026-0103", datetime(2026, 10, 1, 9, 0))   # next month
+
+        r = self.client.get(reverse("invoice_pack", args=[2026, 9]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "SAL-2026-0101")
+        self.assertContains(r, "SAL-2026-0102")
+        self.assertNotContains(r, "SAL-2026-0103")
+
+    def test_empty_month_pack_is_not_an_error(self):
+        r = self.client.get(reverse("invoice_pack", args=[2019, 5]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_single_invoice_and_pack_render_the_same_body(self):
+        """Both use the shared partial, so they can't drift apart."""
+        from datetime import datetime
+        sale = self._sale("SAL-2026-0201", datetime(2026, 11, 5, 11, 0))
+        one = self.client.get(reverse("sale_invoice", args=[sale.pk])).content.decode()
+        pack = self.client.get(reverse("invoice_pack", args=[2026, 11])).content.decode()
+        for token in ("SAL-2026-0201", "Kamau Hardware", "17,000.00", "Billed to"):
+            self.assertIn(token, one)
+            self.assertIn(token, pack)
+
+
+class MoneyFilterTests(TestCase):
+    def test_grouping_and_currency(self):
+        from inventory.templatetags.money import amount, money
+        self.assertEqual(amount(Decimal("1234567.5")), "1,234,567.50")
+        self.assertEqual(amount(Decimal("0")), "0.00")
+        self.assertEqual(money(Decimal("42480")), "KSh 42,480.00")
+        self.assertEqual(money(Decimal("1234567.5"), 0), "KSh 1,234,568")
+
+    def test_missing_values_do_not_crash(self):
+        from inventory.templatetags.money import amount, money
+        for bad in (None, "", "not a number", []):
+            self.assertEqual(amount(bad), "—")
+            self.assertEqual(money(bad), "—")
+
+    def test_dashboard_shows_grouped_currency(self):
+        User.objects.create_user("s", password="pw12345!")
+        self.client.login(username="s", password="pw12345!")
+        product = Product.objects.create(type=Product.FINISHED, name="Table",
+                                         price=Decimal("1250000"), stock_qty=Decimal("5"))
+        sale = Sale.objects.create(number="SAL-2026-0301")
+        SaleItem.objects.create(sale=sale, product=product,
+                                qty=Decimal("1"), rate=Decimal("1250000"))
+        sale.recalculate_total()
+        r = self.client.get(reverse("dashboard"))
+        self.assertContains(r, "KSh 1,250,000")

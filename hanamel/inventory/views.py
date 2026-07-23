@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .models import BusinessProfile, Payment, Product, Sale, SaleItem
+from .templatetags.money import CURRENCY
 
 
 def _next_sale_number():
@@ -174,7 +175,7 @@ def sale_create(request):
                 "catalog_json": _catalog_json(products), "methods": Payment.METHOD_CHOICES,
                 "page": "new", "customer_name": customer})
 
-        messages.success(request, f"Recorded {sale.number} — KES {sale.total:,.2f}")
+        messages.success(request, f"Recorded {sale.number} — {CURRENCY} {sale.total:,.2f}")
         return redirect("sale_detail", pk=sale.pk)
 
     return render(request, "inventory/sale_form.html", {
@@ -208,6 +209,27 @@ def _catalog_json(products):
 
 # --- monthly books export -------------------------------------------------
 
+def _month_range(year, month):
+    """Timezone-aware [start, end) for a calendar month in the yard's local time."""
+    tz = timezone.get_current_timezone()
+    start = timezone.make_aware(datetime(year, month, 1), tz)
+    end = timezone.make_aware(
+        datetime(year + (month == 12), (month % 12) + 1, 1), tz)
+    return start, end
+
+
+@login_required
+def invoice_pack(request, year, month):
+    """Every invoice for a month on one page, page-broken for printing.
+    Browser print gives a single PDF of the lot."""
+    start, end = _month_range(year, month)
+    sales = (Sale.objects.filter(date__gte=start, date__lt=end)
+             .prefetch_related("items__product", "payments").order_by("date"))
+    return render(request, "inventory/invoice_pack.html", {
+        "sales": sales, "biz": BusinessProfile.get(),
+        "label": start.strftime("%B %Y"), "page": "reports"})
+
+
 @login_required
 def reports(request):
     """Pick a month to export. Lists months that actually have sales."""
@@ -224,8 +246,7 @@ def export_month(request, year, month):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-    start = datetime(year, month, 1)
-    end = datetime(year + (month == 12), (month % 12) + 1, 1)
+    start, end = _month_range(year, month)
     sales = (Sale.objects.filter(date__gte=start, date__lt=end)
              .prefetch_related("items__product", "payments").order_by("date"))
     biz = BusinessProfile.get()
@@ -258,7 +279,8 @@ def export_month(request, year, month):
         ws["A3"].font = body
 
     cols = ["Date", "Invoice no.", "Customer", "Items",
-            "Total (KES)", "Paid (KES)", "Balance (KES)", "Payment method", "M-Pesa ref"]
+            f"Total ({CURRENCY})", f"Paid ({CURRENCY})", f"Balance ({CURRENCY})",
+            "Payment method", "M-Pesa ref"]
     write_header(ws, cols)
 
     r = 5
@@ -296,7 +318,7 @@ def export_month(request, year, month):
     ws2["A1"] = f"Line detail — {start.strftime('%B %Y')}"
     ws2["A1"].font = title
     cols2 = ["Date", "Invoice no.", "Customer", "Item", "Species", "Size",
-             "Volume m³/pc", "Qty", "Rate (KES)", "Amount (KES)"]
+             "Volume m³/pc", "Qty", f"Rate ({CURRENCY})", f"Amount ({CURRENCY})"]
     write_header(ws2, cols2)
 
     r = 5

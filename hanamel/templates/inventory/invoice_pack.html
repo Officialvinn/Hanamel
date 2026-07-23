@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Invoices — {{ label }}{% endblock %}
+{% block css %}{% include "inventory/_invoice_css.html" %}
+.packbar{max-width:800px;margin:0 auto 20px;display:flex;justify-content:space-between;
+  align-items:center;gap:14px;flex-wrap:wrap}
+.packbar .count{font-family:var(--mono);font-size:.8rem;color:var(--ink-soft)}
+.doc + .doc{margin-top:26px}
+@media print{
+  .doc{page-break-after:always;break-after:page}
+  .doc:last-child{page-break-after:auto;break-after:auto}
+  .doc + .doc{margin-top:0}
+}
+{% endblock %}
+
+{% block content %}
+<div class="packbar noprint">
+  <div>
+    <h1 style="margin:0">Invoices — {{ label }}</h1>
+    <div class="count">{{ sales|length }} invoice{{ sales|length|pluralize }}</div>
+  </div>
+  <div style="display:flex;gap:9px">
+    <a href="{% url 'reports' %}" class="btn btn-ghost">Back</a>
+    <button type="button" class="btn" onclick="window.print()">Print / Save PDF</button>
+  </div>
+</div>
+
+{% for sale in sales %}
+  {% include "inventory/_invoice_body.html" %}
+{% empty %}
+  <div class="panel"><div class="empty"><p>No sales in {{ label }}.</p></div></div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,61 @@
+{# One invoice. Expects `sale` and `biz` in context. #}
+<div class="doc">
+  <div class="doc-head">
+    <div>
+      <h1 class="biz-name">{{ biz.name }}</h1>
+      <div class="biz-meta">
+        {% if biz.address %}{{ biz.address }}<br>{% endif %}
+        {% if biz.phone %}{{ biz.phone }}<br>{% endif %}
+        {% if biz.kra_pin %}PIN: {{ biz.kra_pin }}{% endif %}
+      </div>
+    </div>
+    <div class="doc-kind">
+      <div class="k">Invoice</div>
+      <div class="no">{{ sale.number }}</div>
+      <div class="dt">{{ sale.date|date:"j F Y, H:i" }}</div>
+      {% if sale.is_paid %}<div style="margin-top:9px"><span class="paidmark">PAID</span></div>{% endif %}
+    </div>
+  </div>
+
+  <div class="bill">
+    <div class="k">Billed to</div>
+    <div class="v">{{ sale.customer_name|default:"Walk-in customer" }}</div>
+  </div>
+
+  <table>
+    <tr>
+      <th>Description</th>
+      <th class="r">Volume m³</th>
+      <th class="r">Rate</th>
+      <th class="r">Qty</th>
+      <th class="r">Amount</th>
+    </tr>
+    {% for it in sale.items.all %}
+    <tr>
+      <td>{{ it.product }}</td>
+      <td class="r num">{{ it.volume_per_piece|default:"—" }}</td>
+      <td class="r num">{{ it.rate|floatformat:2 }}</td>
+      <td class="r num">{{ it.qty|floatformat:0 }}</td>
+      <td class="r num">{{ it.amount|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="sums">
+    <div><span>Total</span><span class="num">{{ sale.total|floatformat:2 }}</span></div>
+    {% for p in sale.payments.all %}
+    <div><span>{{ p.get_method_display }}{% if p.mpesa_receipt %} · {{ p.mpesa_receipt }}{% endif %}</span>
+         <span class="num">{{ p.amount|floatformat:2 }}</span></div>
+    {% endfor %}
+    {% if sale.balance > 0 %}
+    <div class="grand owing"><span>Balance due</span><span>{{ sale.balance|floatformat:2 }}</span></div>
+    {% else %}
+    <div class="grand"><span>Paid</span><span>{{ sale.total|floatformat:2 }}</span></div>
+    {% endif %}
+  </div>
+
+  <div class="foot">
+    {% if biz.till_or_paybill %}M-Pesa: {{ biz.till_or_paybill }}<br>{% endif %}
+    {{ biz.footer_note }}
+  </div>
+</div>

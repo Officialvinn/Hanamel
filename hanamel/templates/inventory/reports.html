@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}Reports — Hanamel{% endblock %}
+{% block content %}
+<h1>Monthly books</h1>
+<p class="sub">Download a month's sales as a spreadsheet for your accountant.</p>
+
+<div class="panel">
+{% if months %}
+<table>
+  <tr><th>Month</th><th class="r">Sales</th><th class="r">Total (KSh)</th><th class="r">Download</th></tr>
+  {% for m in months %}
+  <tr>
+    <td><strong>{{ m.m|date:"F Y" }}</strong></td>
+    <td class="r num">{{ m.n }}</td>
+    <td class="r num">{{ m.total|amount }}</td>
+    <td class="r">
+      <div style="display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap">
+        <a class="btn btn-ghost" style="padding:7px 13px;font-size:.83rem"
+           href="{% url 'export_month' m.m|date:'Y' m.m|date:'n' %}">Spreadsheet</a>
+        <a class="btn btn-ghost" style="padding:7px 13px;font-size:.83rem"
+           href="{% url 'invoice_pack' m.m|date:'Y' m.m|date:'n' %}">Invoices</a>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No sales recorded yet, so there's nothing to export.</p>
+<a href="{% url 'sale_create' %}" class="btn">Record a sale</a></div>
+{% endif %}
+</div>
+
+<p class="sub" style="margin-top:16px">
+<strong>Spreadsheet</strong> — an .xlsx with one row per sale for posting to the books,
+plus a line-by-line sheet. <br>
+<strong>Invoices</strong> — every invoice for the month on one page; use your browser's
+Print to save the lot as a single PDF.</p>
+{% endblock %}
