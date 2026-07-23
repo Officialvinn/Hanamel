@@ -6,7 +6,10 @@
     <h1 class="num">{{ sale.number }}</h1>
     <p class="sub">{{ sale.customer_name|default:"Walk-in" }} · {{ sale.date|date:"j M Y, H:i" }}</p>
   </div>
-  <a href="{% url 'sale_list' %}" class="btn btn-ghost">All sales</a>
+  <div style="display:flex;gap:9px">
+    <a href="{% url 'sale_list' %}" class="btn btn-ghost">All sales</a>
+    <a href="{% url 'sale_invoice' sale.pk %}" class="btn">Invoice</a>
+  </div>
 </div>
 
 <div class="panel">
@@ -28,5 +31,11 @@
   <span class="num" style="font-size:1.5rem;font-weight:600">KES {{ sale.total|floatformat:2 }}</span>
 </div>
 </div>
+{% if sale.balance > 0 %}
+<div class="msg msg-error" style="margin-top:16px">
+  Balance outstanding: <strong class="num">KES {{ sale.balance|floatformat:2 }}</strong>
+  of {{ sale.total|floatformat:2 }}
+</div>
+{% endif %}
 <p class="sub" style="margin-top:14px">Rates and volumes are frozen as they were at the time of sale.</p>
 {% endblock %}

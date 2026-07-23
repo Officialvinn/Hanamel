@@ -3,10 +3,19 @@
 {% block css %}
 .builder{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
 .picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
-.chip{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);
-  padding:12px;cursor:pointer;text-align:left;font-family:var(--sans);
-  display:flex;flex-direction:column;gap:7px}
+.chip{position:relative;background:var(--card);border:1px solid var(--rule);
+  border-radius:var(--r);padding:12px;cursor:pointer;text-align:left;
+  font-family:var(--sans);display:flex;flex-direction:column;gap:7px;
+  transition:border-color .12s,background-color .12s}
 .chip:hover{border-color:var(--mark)}
+.chip.sel{border-color:var(--mark);background:var(--mark-soft);
+  box-shadow:inset 0 0 0 1px var(--mark)}
+.chip.sel .lab{color:var(--mark-deep)}
+.chip .badge{position:absolute;top:7px;right:7px;background:var(--mark);color:#fff;
+  font-family:var(--mono);font-size:.68rem;font-weight:600;line-height:1;
+  min-width:21px;height:21px;border-radius:11px;padding:0 6px;
+  display:none;align-items:center;justify-content:center}
+.chip.sel .badge{display:flex}
 .chip:disabled{opacity:.42;cursor:not-allowed}
 .chip:disabled:hover{border-color:var(--rule)}
 .chip .cs{width:100%;height:44px}
@@ -33,6 +42,9 @@
 .tot .v{font-family:var(--mono);font-size:1.5rem;font-weight:600;
   font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .cart-foot{padding:0 14px 15px}
+.payrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.payrow label,#mpesaref label{margin-bottom:4px}
+.payrow select,.payrow input{padding:9px 10px;font-size:.92rem}
 h2.species{display:flex;align-items:center;gap:10px;color:var(--mark-deep)}
 h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
 .cart-empty{padding:34px 16px;text-align:center;color:var(--ink-soft);font-size:.86rem}
@@ -67,6 +79,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
         {% for p in g.items %}
         <button type="button" class="chip" data-id="{{ p.pk }}"
                 {% if p.stock_qty <= 0 %}disabled{% endif %}>
+          <span class="badge" aria-hidden="true"></span>
           <span class="cs">{% if p.cross_section_px %}
             <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
           {% endif %}</span>
@@ -88,6 +101,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
         {% for p in finished %}
         <button type="button" class="chip" data-id="{{ p.pk }}"
                 {% if p.stock_qty <= 0 %}disabled{% endif %}>
+          <span class="badge" aria-hidden="true"></span>
           <span class="lab">{{ p.name }}</span>
           <span class="pr">KES {{ p.price|floatformat:0 }}</span>
           <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
@@ -107,6 +121,24 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
           <span class="v" id="total">0</span>
         </div>
         <div class="cart-foot">
+          <div class="payrow">
+            <div>
+              <label for="paymethod">Paid by</label>
+              <select id="paymethod" name="payment_method">
+                {% for val, lab in methods %}<option value="{{ val }}">{{ lab }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="paidamt">Amount paid</label>
+              <input type="number" id="paidamt" name="amount_paid" step="0.01" min="0"
+                     placeholder="Full amount">
+            </div>
+          </div>
+          <div id="mpesaref" style="display:none;margin-bottom:12px">
+            <label for="mref">M-Pesa code</label>
+            <input type="text" id="mref" name="mpesa_receipt" placeholder="e.g. SFG4H2K9LM"
+                   autocomplete="off" style="text-transform:uppercase">
+          </div>
           <button type="submit" class="btn btn-lg" id="confirm" disabled>Record sale</button>
         </div>
       </div>
@@ -180,7 +212,26 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
     emptyEl.style.display = cart.length ? 'none' : '';
     totalEl.textContent = money(total);
     confirmEl.disabled = cart.length === 0 || total <= 0;
+
+    // mirror the cart back onto the picker so selection is visible at a glance
+    document.querySelectorAll('.chip').forEach(function(btn){
+      var id = parseInt(btn.dataset.id, 10);
+      var inCart = cart.find(function(c){ return c.id === id; });
+      btn.classList.toggle('sel', !!inCart);
+      btn.setAttribute('aria-pressed', inCart ? 'true' : 'false');
+      var badge = btn.querySelector('.badge');
+      if (badge) badge.textContent = inCart ? inCart.qty : '';
+    });
   }
+
+  // the M-Pesa code box only matters when M-Pesa is the method
+  var methodEl = document.getElementById('paymethod');
+  var refWrap = document.getElementById('mpesaref');
+  function syncMethod(){
+    refWrap.style.display = methodEl.value === 'mpesa' ? '' : 'none';
+  }
+  methodEl.addEventListener('change', syncMethod);
+  syncMethod();
 
   document.querySelectorAll('.chip').forEach(function(btn){
     btn.addEventListener('click', function(){

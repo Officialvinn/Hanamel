@@ -78,6 +78,23 @@ class Sale(models.Model):
         self.total = sum((line.amount for line in self.items.all()), Decimal("0.00"))
         self.save(update_fields=["total"])
 
+    @property
+    def amount_paid(self):
+        return sum((p.amount for p in self.payments.all()), Decimal("0.00"))
+
+    @property
+    def balance(self):
+        return self.total - self.amount_paid
+
+    @property
+    def is_paid(self):
+        return self.balance <= 0
+
+    @property
+    def payment_summary(self):
+        methods = sorted({p.get_method_display() for p in self.payments.all()})
+        return ", ".join(methods) if methods else "Unpaid"
+
     def __str__(self):
         return self.number or f"Sale #{self.pk}"
 
@@ -119,3 +136,53 @@ def _cross_section_px(product, scale=7, cap=84):
 
 
 Product.cross_section_px = property(_cross_section_px)
+
+
+class BusinessProfile(models.Model):
+    """Single row holding the details printed on invoices. Edit in admin."""
+    name = models.CharField(max_length=120, default="Hanamel Timber")
+    kra_pin = models.CharField(max_length=20, blank=True, help_text="Seller KRA PIN")
+    phone = models.CharField(max_length=40, blank=True)
+    address = models.CharField(max_length=200, blank=True)
+    till_or_paybill = models.CharField(max_length=40, blank=True,
+                                       help_text="M-Pesa Till or Paybill number")
+    footer_note = models.CharField(
+        max_length=200, blank=True,
+        default="Goods remain the property of the seller until paid in full.")
+
+    class Meta:
+        verbose_name = "Business profile"
+        verbose_name_plural = "Business profile"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1                      # enforce a single row
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return self.name
+
+
+class Payment(models.Model):
+    CASH = "cash"
+    MPESA = "mpesa"
+    BANK = "bank"
+    METHOD_CHOICES = [(CASH, "Cash"), (MPESA, "M-Pesa"), (BANK, "Bank transfer")]
+
+    sale = models.ForeignKey(Sale, related_name="payments", on_delete=models.CASCADE)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=CASH)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    mpesa_receipt = models.CharField(max_length=32, blank=True,
+                                     help_text="M-Pesa confirmation code, e.g. SFG4H2K9LM")
+    received_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=140, blank=True)
+
+    class Meta:
+        ordering = ["received_at"]
+
+    def __str__(self):
+        return f"{self.get_method_display()} {self.amount}"

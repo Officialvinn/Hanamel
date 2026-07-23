@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Product, Sale, SaleItem
+from .models import BusinessProfile, Payment, Product, Sale, SaleItem
 
 
 @admin.register(Product)
@@ -22,9 +22,23 @@ class SaleItemInline(admin.TabularInline):
     readonly_fields = ("amount",)
 
 
+class PaymentInline(admin.TabularInline):
+    model = Payment
+    extra = 0
+
+
+@admin.register(BusinessProfile)
+class BusinessProfileAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return not BusinessProfile.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ("number", "customer_name", "date", "total")
+    list_display = ("number", "customer_name", "date", "total", "amount_paid", "balance")
     search_fields = ("number", "customer_name")
-    inlines = [SaleItemInline]
+    inlines = [SaleItemInline, PaymentInline]
     readonly_fields = ("total",)

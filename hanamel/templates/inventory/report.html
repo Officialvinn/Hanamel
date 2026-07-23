@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Reports — Hanamel{% endblock %}
+{% block content %}
+<h1>Monthly books</h1>
+<p class="sub">Download a month's sales as a spreadsheet for your accountant.</p>
+
+<div class="panel">
+{% if months %}
+<table>
+  <tr><th>Month</th><th class="r">Sales</th><th class="r">Total (KES)</th><th class="r"></th></tr>
+  {% for m in months %}
+  <tr>
+    <td><strong>{{ m.m|date:"F Y" }}</strong></td>
+    <td class="r num">{{ m.n }}</td>
+    <td class="r num">{{ m.total|floatformat:2 }}</td>
+    <td class="r">
+      <a class="btn btn-ghost" style="padding:7px 14px;font-size:.84rem"
+         href="{% url 'export_month' m.m|date:'Y' m.m|date:'n' %}">Download .xlsx</a>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No sales recorded yet, so there's nothing to export.</p>
+<a href="{% url 'sale_create' %}" class="btn">Record a sale</a></div>
+{% endif %}
+</div>
+
+<p class="sub" style="margin-top:16px">
+Each file has two sheets: one row per sale for posting to the books, and a
+line-by-line breakdown for checking the detail.</p>
+{% endblock %}

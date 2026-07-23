@@ -135,6 +135,7 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
     <a href="{% url 'sale_create' %}" class="{% if page == 'new' %}on{% endif %}">Record sale</a>
     <a href="{% url 'sale_list' %}" class="{% if page == 'sales' %}on{% endif %}">Sales</a>
     <a href="{% url 'product_list' %}" class="{% if page == 'stock' %}on{% endif %}">Stock</a>
+    <a href="{% url 'reports' %}" class="{% if page == 'reports' %}on{% endif %}">Reports</a>
   </nav>
   <span class="who hide-sm">{{ user.username }}</span>
   {% endif %}
