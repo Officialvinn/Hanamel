@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Overview — Hanamel{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Overview</h1>
+    <p class="sub">{{ todays_count }} sale{{ todays_count|pluralize }} recorded today.</p>
+  </div>
+  <a href="{% url 'sale_create' %}" class="btn">Record sale</a>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="k">Today</div><div class="v">{{ todays_total|floatformat:0 }}</div></div>
+  <div class="stat"><div class="k">Last 7 days</div><div class="v">{{ week_total|floatformat:0 }}</div></div>
+  <div class="stat"><div class="k">Sales today</div><div class="v">{{ todays_count }}</div></div>
+</div>
+
+{% if low_stock %}
+<h2>Running low</h2>
+<div class="panel">
+<table>
+  <tr><th>Item</th><th class="r">In stock</th><th class="r hide-sm">Reorder at</th></tr>
+  {% for p in low_stock %}
+  <tr>
+    <td><span class="size">{{ p }}</span></td>
+    <td class="r num"><span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span></td>
+    <td class="r num hide-sm">{{ p.low_stock_threshold|floatformat:0 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+<h2>Recent sales</h2>
+<div class="panel">
+{% if recent_sales %}
+<table>
+  <tr><th>Number</th><th>Customer</th><th class="hide-sm">When</th><th class="r">Total</th></tr>
+  {% for s in recent_sales %}
+  <tr>
+    <td class="num"><a href="{% url 'sale_detail' s.pk %}">{{ s.number }}</a></td>
+    <td>{{ s.customer_name|default:"Walk-in" }}</td>
+    <td class="meta hide-sm">{{ s.date|date:"j M, H:i" }}</td>
+    <td class="r num">{{ s.total|floatformat:2 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No sales recorded yet.</p>
+<a href="{% url 'sale_create' %}" class="btn">Record the first sale</a></div>
+{% endif %}
+</div>
+{% endblock %}

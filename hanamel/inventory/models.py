@@ -13,6 +13,7 @@ class Product(models.Model):
     name = models.CharField(max_length=120)
     stock_qty = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_active = models.BooleanField(default=True)
+    low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=10)
 
     # Finished products use this directly. Timber leaves it null.
     price = models.DecimalField(
@@ -100,3 +101,21 @@ class SaleItem(models.Model):
 
     def __str__(self):
         return f"{self.qty} x {self.product}"
+
+
+# --- presentational helpers -------------------------------------------------
+
+def _cross_section_px(product, scale=7, cap=84):
+    """Pixel size of a proportional cross-section swatch (width x thickness)."""
+    if product.type != Product.TIMBER or not (product.width and product.thickness):
+        return None
+    w = float(product.width) * scale
+    h = float(product.thickness) * scale
+    longest = max(w, h)
+    if longest > cap:
+        factor = cap / longest
+        w, h = w * factor, h * factor
+    return {"w": round(w, 1), "h": round(h, 1)}
+
+
+Product.cross_section_px = property(_cross_section_px)

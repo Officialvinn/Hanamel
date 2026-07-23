@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Stock — Hanamel{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Stock</h1><p class="sub">Prices are computed from the rate per cubic metre.</p></div>
+  <form method="get" style="max-width:220px">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search species…" aria-label="Search stock">
+  </form>
+</div>
+
+{% for g in timber_groups %}
+<h2>{{ g.species }}</h2>
+<div class="panel">
+<table>
+  <tr><th class="hide-sm">Section</th><th>Size</th><th class="hide-sm">Volume m³</th>
+      <th class="r">Per piece</th><th class="r">Stock</th></tr>
+  {% for p in g.items %}
+  <tr>
+    <td class="hide-sm"><span class="cs">{% if p.cross_section_px %}
+      <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
+    {% endif %}</span></td>
+    <td>
+      <div class="size">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</div>
+      <div class="meta">{{ p.species }}</div>
+    </td>
+    <td class="num hide-sm">{{ p.volume_m3 }}</td>
+    <td class="r num">{{ p.unit_price|floatformat:2 }}</td>
+    <td class="r num">
+      {% if p.stock_qty <= p.low_stock_threshold %}
+        <span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span>
+      {% else %}{{ p.stock_qty|floatformat:0 }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% empty %}
+<h2>Timber</h2>
+<div class="panel">
+<div class="empty"><p>No timber yet. Seed the common sizes:</p>
+<code class="num">python manage.py seed_products --species Mahogany --rate 200000</code></div>
+</div>
+{% endfor %}
+
+{% if finished %}
+<h2>Finished products</h2>
+<div class="panel">
+<table>
+  <tr><th>Item</th><th class="r">Price</th><th class="r">Stock</th></tr>
+  {% for p in finished %}
+  <tr>
+    <td>{{ p.name }}</td>
+    <td class="r num">{{ p.price|floatformat:2 }}</td>
+    <td class="r num">
+      {% if p.stock_qty <= p.low_stock_threshold %}
+        <span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span>
+      {% else %}{{ p.stock_qty|floatformat:0 }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}

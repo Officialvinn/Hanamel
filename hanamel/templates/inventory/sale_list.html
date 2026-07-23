@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Sales — Hanamel{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Sales</h1><p class="sub">Every sale recorded, newest first.</p></div>
+  <a href="{% url 'sale_create' %}" class="btn">Record sale</a>
+</div>
+<div class="panel">
+{% if sales %}
+<table>
+  <tr><th>Number</th><th>Customer</th><th class="hide-sm">Items</th>
+      <th class="hide-sm">When</th><th class="r">Total</th></tr>
+  {% for s in sales %}
+  <tr>
+    <td class="num"><a href="{% url 'sale_detail' s.pk %}">{{ s.number }}</a></td>
+    <td>{{ s.customer_name|default:"Walk-in" }}</td>
+    <td class="meta hide-sm">{{ s.items.count }}</td>
+    <td class="meta hide-sm">{{ s.date|date:"j M Y, H:i" }}</td>
+    <td class="r num">{{ s.total|floatformat:2 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No sales yet.</p>
+<a href="{% url 'sale_create' %}" class="btn">Record the first sale</a></div>
+{% endif %}
+</div>
+{% endblock %}

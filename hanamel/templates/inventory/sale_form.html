@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Record sale — Hanamel{% endblock %}
+{% block css %}
+.builder{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+.picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+.chip{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);
+  padding:12px;cursor:pointer;text-align:left;font-family:var(--sans);
+  display:flex;flex-direction:column;gap:7px}
+.chip:hover{border-color:var(--mark)}
+.chip:disabled{opacity:.42;cursor:not-allowed}
+.chip:disabled:hover{border-color:var(--rule)}
+.chip .cs{width:100%;height:44px}
+.chip .lab{font-family:var(--mono);font-weight:600;font-size:.9rem}
+.chip .pr{font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);
+  font-variant-numeric:tabular-nums}
+.chip .st{font-family:var(--mono);font-size:.66rem;color:var(--ink-soft)}
+.chip .st.low{color:var(--oxide);font-weight:600}
+.cart{position:sticky;top:20px}
+.cart-body{padding:4px 0;max-height:46vh;overflow-y:auto}
+.line{display:grid;grid-template-columns:1fr 78px auto;gap:9px;align-items:center;
+  padding:11px 14px;border-bottom:1px solid var(--rule)}
+.line:last-child{border-bottom:none}
+.line .nm{font-family:var(--mono);font-size:.84rem;font-weight:500;line-height:1.3}
+.line .ea{font-size:.7rem;color:var(--ink-soft);font-family:var(--mono)}
+.line input{padding:7px 8px;font-size:.9rem;text-align:right}
+.line .x{background:none;border:none;color:var(--ink-soft);cursor:pointer;
+  font-size:1.2rem;padding:0 4px;line-height:1}
+.line .x:hover{color:var(--oxide)}
+.tot{border-top:2px solid var(--ink);padding:15px 14px;display:flex;
+  justify-content:space-between;align-items:baseline}
+.tot .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.tot .v{font-family:var(--mono);font-size:1.5rem;font-weight:600;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.cart-foot{padding:0 14px 15px}
+h2.species{display:flex;align-items:center;gap:10px;color:var(--mark-deep)}
+h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
+.cart-empty{padding:34px 16px;text-align:center;color:var(--ink-soft);font-size:.86rem}
+@media (max-width:860px){
+  .builder{grid-template-columns:1fr}
+  .cart{position:static;border-bottom:none}
+  /* keep the total and the confirm button in reach while picking items */
+  .settle{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);
+    border-top:1px solid var(--rule);box-shadow:0 -6px 20px rgba(0,0,0,.09)}
+  .cart-body{max-height:none}
+  #saleform{padding-bottom:132px}
+}
+{% endblock %}
+
+{% block content %}
+<h1>Record a sale</h1>
+<p class="sub">Tap items to add them, set quantities, then confirm.</p>
+
+<form method="post" id="saleform">
+  {% csrf_token %}
+  <div class="builder">
+    <div>
+      <div class="field" style="max-width:380px">
+        <label for="cust">Customer <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="cust" name="customer_name" value="{{ customer_name|default:'' }}"
+               placeholder="Walk-in" autocomplete="off">
+      </div>
+
+      {% for g in timber_groups %}
+      <h2 class="species">{{ g.species }}</h2>
+      <div class="picker">
+        {% for p in g.items %}
+        <button type="button" class="chip" data-id="{{ p.pk }}"
+                {% if p.stock_qty <= 0 %}disabled{% endif %}>
+          <span class="cs">{% if p.cross_section_px %}
+            <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
+          {% endif %}</span>
+          <span class="lab">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</span>
+          <span class="pr">KES {{ p.unit_price|floatformat:0 }}</span>
+          <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% empty %}
+      <div class="panel" style="padding:26px;text-align:center;color:var(--ink-soft)">
+        No timber in stock yet. Add some under Stock.
+      </div>
+      {% endfor %}
+
+      {% if finished %}
+      <h2 class="species">Finished products</h2>
+      <div class="picker">
+        {% for p in finished %}
+        <button type="button" class="chip" data-id="{{ p.pk }}"
+                {% if p.stock_qty <= 0 %}disabled{% endif %}>
+          <span class="lab">{{ p.name }}</span>
+          <span class="pr">KES {{ p.price|floatformat:0 }}</span>
+          <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <aside class="panel cart">
+      <div class="cart-body" id="lines">
+        <div class="cart-empty" id="cartempty">No items yet.<br>Tap a size to start.</div>
+      </div>
+      <div class="settle">
+        <div class="tot">
+          <span class="k">Total</span>
+          <span class="v" id="total">0</span>
+        </div>
+        <div class="cart-foot">
+          <button type="submit" class="btn btn-lg" id="confirm" disabled>Record sale</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</form>
+{% endblock %}
+
+{% block js %}
+<script>
+(function(){
+  var CAT = {};
+  ({{ catalog_json|safe }}).forEach(function(p){ CAT[p.id] = p; });
+
+  var cart = [];                      // [{id, qty}]
+  var linesEl = document.getElementById('lines');
+  var emptyEl = document.getElementById('cartempty');
+  var totalEl = document.getElementById('total');
+  var confirmEl = document.getElementById('confirm');
+
+  function money(n){
+    return n.toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+
+  function render(){
+    linesEl.querySelectorAll('.line').forEach(function(n){ n.remove(); });
+    var total = 0;
+
+    cart.forEach(function(item, i){
+      var p = CAT[item.id];
+      var amount = p.unit_price * item.qty;
+      total += amount;
+
+      var row = document.createElement('div');
+      row.className = 'line';
+
+      var left = document.createElement('div');
+      var nm = document.createElement('div');
+      nm.className = 'nm'; nm.textContent = p.label;
+      var ea = document.createElement('div');
+      ea.className = 'ea'; ea.textContent = money(p.unit_price) + ' ea';
+      left.appendChild(nm); left.appendChild(ea);
+
+      var qty = document.createElement('input');
+      qty.type = 'number'; qty.min = '1'; qty.step = '1';
+      qty.max = String(p.stock);
+      qty.value = item.qty;
+      qty.setAttribute('aria-label', 'Quantity for ' + p.label);
+      qty.addEventListener('input', function(){
+        var v = parseFloat(qty.value);
+        item.qty = (isNaN(v) || v < 0) ? 0 : v;
+        render();
+      });
+
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'x'; del.innerHTML = '&times;';
+      del.setAttribute('aria-label', 'Remove ' + p.label);
+      del.addEventListener('click', function(){ cart.splice(i,1); render(); });
+
+      row.appendChild(left); row.appendChild(qty); row.appendChild(del);
+      linesEl.insertBefore(row, emptyEl);
+
+      // hidden inputs so the server gets the lines
+      var h1 = document.createElement('input');
+      h1.type='hidden'; h1.name='product_id'; h1.value=item.id;
+      var h2 = document.createElement('input');
+      h2.type='hidden'; h2.name='qty'; h2.value=item.qty;
+      row.appendChild(h1); row.appendChild(h2);
+    });
+
+    emptyEl.style.display = cart.length ? 'none' : '';
+    totalEl.textContent = money(total);
+    confirmEl.disabled = cart.length === 0 || total <= 0;
+  }
+
+  document.querySelectorAll('.chip').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = parseInt(btn.dataset.id, 10);
+      var found = cart.find(function(c){ return c.id === id; });
+      if (found) { found.qty += 1; } else { cart.push({id:id, qty:1}); }
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+{% endblock %}

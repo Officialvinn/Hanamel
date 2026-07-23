@@ -1,0 +1,150 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Hanamel{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7FAF8; --card:#FFFFFF; --ink:#182028; --ink-soft:#5E6B75;
+  --rule:#E3EAE6; --mark:#0F9455; --mark-deep:#0A6E3F; --mark-soft:#E4F5EC;
+  --oxide:#C2551C; --oxide-soft:#FDEEE3; --bar:#FFFFFF;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:3px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--mark);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* ---- chrome ---- */
+.topbar{background:var(--bar);border-bottom:1px solid var(--rule);padding:0 20px;
+  display:flex;align-items:center;gap:28px;min-height:62px;
+  position:sticky;top:0;z-index:30}
+.brand{font-family:var(--mono);font-weight:600;font-size:1.05rem;letter-spacing:.06em;
+  color:var(--ink);text-transform:uppercase;white-space:nowrap;flex:none}
+.brand:hover{text-decoration:none}
+.topbar nav{display:flex;gap:24px;flex:1;flex-wrap:nowrap;overflow-x:auto;
+  scrollbar-width:none;-ms-overflow-style:none}
+.topbar nav::-webkit-scrollbar{display:none}
+.topbar nav a{color:var(--ink-soft);font-size:.9rem;font-weight:500;padding:19px 0;
+  border-bottom:2px solid transparent;white-space:nowrap;flex:none}
+.topbar nav a:hover{color:var(--ink);text-decoration:none}
+.topbar nav a.on{color:var(--mark-deep);border-bottom-color:var(--mark);font-weight:600}
+.topbar .who{font-family:var(--mono);font-size:.75rem;color:var(--ink-soft);flex:none}
+
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 72px}
+h1{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--ink-soft);font-size:.9rem;margin:0 0 26px}
+h2{font-size:.72rem;font-family:var(--mono);font-weight:600;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-soft);margin:34px 0 12px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;
+  gap:16px;flex-wrap:wrap;margin-bottom:8px}
+
+/* ---- numerics ---- */
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---- buttons ---- */
+.btn{display:inline-block;background:var(--mark);color:#fff;border:1px solid var(--mark);
+  padding:11px 20px;border-radius:var(--r);font-family:var(--sans);font-size:.92rem;
+  font-weight:600;cursor:pointer;line-height:1.2}
+.btn:hover{background:var(--mark-deep);border-color:var(--mark-deep);text-decoration:none;color:#fff}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+.btn-ghost:hover{background:#fff;color:var(--ink);border-color:var(--ink-soft)}
+.btn-lg{padding:15px 28px;font-size:1rem;width:100%}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ---- surfaces ---- */
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);
+  box-shadow:0 1px 2px rgba(24,32,40,.04)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.stat{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);
+  padding:18px 20px;box-shadow:0 1px 2px rgba(24,32,40,.04)}
+.stat .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.stat .v{font-family:var(--mono);font-size:1.75rem;font-weight:600;
+  font-variant-numeric:tabular-nums;margin-top:6px;letter-spacing:-.02em}
+
+/* ---- tables ---- */
+table{width:100%;border-collapse:collapse;background:var(--card)}
+th{font-family:var(--mono);font-size:.66rem;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-soft);text-align:left;padding:11px 14px;background:#FBFDFC;
+  border-bottom:1px solid var(--rule);font-weight:600;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--rule);font-size:.92rem;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.r{text-align:right}
+
+/* ---- the signature: proportional cross-sections ---- */
+.cs{display:flex;align-items:center;justify-content:center;width:92px;height:52px;flex:none}
+.cs i{display:block;background:linear-gradient(105deg,#E2CFAE,#CBAE82);
+  border:1px solid #B0906A;border-radius:1px}
+
+.size{font-family:var(--mono);font-weight:600;font-size:.95rem;letter-spacing:.02em}
+.meta{color:var(--ink-soft);font-size:.78rem}
+
+/* ---- pills ---- */
+.pill{display:inline-block;font-family:var(--mono);font-size:.66rem;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:2px}
+.pill-ok{background:var(--mark-soft);color:var(--mark)}
+.pill-low{background:var(--oxide-soft);color:var(--oxide)}
+
+/* ---- forms ---- */
+input[type=text],input[type=number],input[type=password],select{
+  font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px solid var(--rule);
+  border-radius:var(--r);background:#fff;color:var(--ink);width:100%}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;font-weight:600}
+.field{margin-bottom:18px}
+
+/* ---- messages ---- */
+.msg{padding:12px 16px;border-radius:var(--r);margin-bottom:16px;font-size:.92rem;
+  border:1px solid}
+.msg-success{background:var(--mark-soft);border-color:#B4E3C9;color:#0A6E3F}
+.msg-error{background:var(--oxide-soft);border-color:#F3CDB4;color:#9B420F}
+
+.empty{padding:44px 20px;text-align:center;color:var(--ink-soft);font-size:.92rem}
+.empty p{margin:0 0 16px}
+
+@media (max-width:640px){
+  .topbar{flex-direction:column;align-items:stretch;gap:0;padding:0 14px;min-height:0}
+  .brand{padding:13px 0 9px}
+  .topbar nav{gap:20px;border-top:1px solid var(--rule);margin:0 -14px;padding:0 14px}
+  .topbar nav a{padding:12px 0;font-size:.88rem}
+  .wrap{padding:20px 14px 60px}
+  .hide-sm{display:none}
+  th,td{padding:10px 9px;font-size:.86rem}
+  .cs{width:62px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+{% block css %}{% endblock %}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="{% url 'dashboard' %}" class="brand">Hanamel</a>
+  {% if user.is_authenticated %}
+  <nav>
+    <a href="{% url 'dashboard' %}" class="{% if page == 'dash' %}on{% endif %}">Overview</a>
+    <a href="{% url 'sale_create' %}" class="{% if page == 'new' %}on{% endif %}">Record sale</a>
+    <a href="{% url 'sale_list' %}" class="{% if page == 'sales' %}on{% endif %}">Sales</a>
+    <a href="{% url 'product_list' %}" class="{% if page == 'stock' %}on{% endif %}">Stock</a>
+  </nav>
+  <span class="who hide-sm">{{ user.username }}</span>
+  {% endif %}
+</header>
+<main class="wrap">
+  {% if messages %}{% for m in messages %}
+    <div class="msg msg-{{ m.tags }}">{{ m }}</div>
+  {% endfor %}{% endif %}
+  {% block content %}{% endblock %}
+</main>
+{% block js %}{% endblock %}
+</body>
+</html>
