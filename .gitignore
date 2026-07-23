@@ -1,4 +1,4 @@
-# --- Virtual environments (this is what bloated your repo) ---
+# --- Virtual environments ---
 venv/
 env/
 .venv/
@@ -9,19 +9,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
 build/
 dist/
 *.egg-info/
-.eggs/
 
 # --- Django ---
 *.log
 db.sqlite3
 db.sqlite3-journal
 /media/
-/staticfiles/
-/static_root/
+staticfiles/
 local_settings.py
 
 # --- Environment / secrets ---
@@ -33,7 +30,6 @@ local_settings.py
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
 
 # --- OS ---
@@ -41,7 +37,7 @@ local_settings.py
 Thumbs.db
 desktop.ini
 
-# --- Archives / build artefacts ---
+# --- Archives ---
 *.zip
 *.tar.gz
 
@@ -49,4 +45,3 @@ desktop.ini
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/

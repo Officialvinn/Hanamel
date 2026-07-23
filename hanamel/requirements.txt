@@ -1,2 +1,8 @@
 Django>=5.0
 openpyxl>=3.1
+
+# --- production ---
+gunicorn>=21.2
+whitenoise>=6.6
+dj-database-url>=2.1
+psycopg[binary]>=3.1

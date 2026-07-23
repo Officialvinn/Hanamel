@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load money %}
 {% block title %}Record sale — Hanamel{% endblock %}
 {% block css %}
 .builder{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
@@ -84,7 +85,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
             <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
           {% endif %}</span>
           <span class="lab">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</span>
-          <span class="pr">KES {{ p.unit_price|floatformat:0 }}</span>
+          <span class="pr">{{ p.unit_price|money:0 }}</span>
           <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
         </button>
         {% endfor %}
@@ -103,7 +104,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
                 {% if p.stock_qty <= 0 %}disabled{% endif %}>
           <span class="badge" aria-hidden="true"></span>
           <span class="lab">{{ p.name }}</span>
-          <span class="pr">KES {{ p.price|floatformat:0 }}</span>
+          <span class="pr">{{ p.price|money:0 }}</span>
           <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
         </button>
         {% endfor %}
@@ -117,7 +118,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
       </div>
       <div class="settle">
         <div class="tot">
-          <span class="k">Total</span>
+          <span class="k">Total (KSh)</span>
           <span class="v" id="total">0</span>
         </div>
         <div class="cart-foot">
@@ -160,6 +161,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
   var confirmEl = document.getElementById('confirm');
 
   function money(n){
+    // same grouping as the server-side `amount` filter
     return n.toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 

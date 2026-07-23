@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load money %}
 {% block title %}Overview — Hanamel{% endblock %}
 {% block content %}
 <div class="head">
@@ -10,8 +11,8 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="k">Today</div><div class="v">{{ todays_total|floatformat:0 }}</div></div>
-  <div class="stat"><div class="k">Last 7 days</div><div class="v">{{ week_total|floatformat:0 }}</div></div>
+  <div class="stat"><div class="k">Today</div><div class="v">{{ todays_total|money:0 }}</div></div>
+  <div class="stat"><div class="k">Last 7 days</div><div class="v">{{ week_total|money:0 }}</div></div>
   <div class="stat"><div class="k">Sales today</div><div class="v">{{ todays_count }}</div></div>
 </div>
 
@@ -35,13 +36,13 @@
 <div class="panel">
 {% if recent_sales %}
 <table>
-  <tr><th>Number</th><th>Customer</th><th class="hide-sm">When</th><th class="r">Total</th></tr>
+  <tr><th>Number</th><th>Customer</th><th class="hide-sm">When</th><th class="r">Total (KSh)</th></tr>
   {% for s in recent_sales %}
   <tr>
     <td class="num"><a href="{% url 'sale_detail' s.pk %}">{{ s.number }}</a></td>
     <td>{{ s.customer_name|default:"Walk-in" }}</td>
     <td class="meta hide-sm">{{ s.date|date:"j M, H:i" }}</td>
-    <td class="r num">{{ s.total|floatformat:2 }}</td>
+    <td class="r num">{{ s.total|amount }}</td>
   </tr>
   {% endfor %}
 </table>

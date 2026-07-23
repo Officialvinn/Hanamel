@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load money %}
 {% block title %}{{ sale.number }} — Hanamel{% endblock %}
 {% block content %}
 <div class="head">
@@ -14,27 +15,27 @@
 
 <div class="panel">
 <table>
-  <tr><th>Item</th><th class="r hide-sm">Volume m³</th><th class="r">Rate</th>
-      <th class="r">Qty</th><th class="r">Amount</th></tr>
+  <tr><th>Item</th><th class="r hide-sm">Volume m³</th><th class="r">Rate (KSh)</th>
+      <th class="r">Qty</th><th class="r">Amount (KSh)</th></tr>
   {% for it in sale.items.all %}
   <tr>
     <td><span class="size">{{ it.product }}</span></td>
     <td class="r num hide-sm">{{ it.volume_per_piece|default:"—" }}</td>
-    <td class="r num">{{ it.rate|floatformat:2 }}</td>
+    <td class="r num">{{ it.rate|amount }}</td>
     <td class="r num">{{ it.qty|floatformat:0 }}</td>
-    <td class="r num">{{ it.amount|floatformat:2 }}</td>
+    <td class="r num">{{ it.amount|amount }}</td>
   </tr>
   {% endfor %}
 </table>
 <div class="tot" style="padding:15px 14px;border-top:2px solid var(--ink);display:flex;justify-content:space-between;align-items:baseline">
   <span style="font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Total</span>
-  <span class="num" style="font-size:1.5rem;font-weight:600">KES {{ sale.total|floatformat:2 }}</span>
+  <span class="num" style="font-size:1.5rem;font-weight:600">{{ sale.total|money }}</span>
 </div>
 </div>
 {% if sale.balance > 0 %}
 <div class="msg msg-error" style="margin-top:16px">
-  Balance outstanding: <strong class="num">KES {{ sale.balance|floatformat:2 }}</strong>
-  of {{ sale.total|floatformat:2 }}
+  Balance outstanding: <strong class="num">{{ sale.balance|money }}</strong>
+  of {{ sale.total|money }}
 </div>
 {% endif %}
 <p class="sub" style="margin-top:14px">Rates and volumes are frozen as they were at the time of sale.</p>

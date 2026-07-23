@@ -1,3 +1,4 @@
+{% load money %}
 {# One invoice. Expects `sale` and `biz` in context. #}
 <div class="doc">
   <div class="doc-head">
@@ -26,31 +27,31 @@
     <tr>
       <th>Description</th>
       <th class="r">Volume m³</th>
-      <th class="r">Rate</th>
+      <th class="r">Rate (KSh)</th>
       <th class="r">Qty</th>
-      <th class="r">Amount</th>
+      <th class="r">Amount (KSh)</th>
     </tr>
     {% for it in sale.items.all %}
     <tr>
       <td>{{ it.product }}</td>
       <td class="r num">{{ it.volume_per_piece|default:"—" }}</td>
-      <td class="r num">{{ it.rate|floatformat:2 }}</td>
+      <td class="r num">{{ it.rate|amount }}</td>
       <td class="r num">{{ it.qty|floatformat:0 }}</td>
-      <td class="r num">{{ it.amount|floatformat:2 }}</td>
+      <td class="r num">{{ it.amount|amount }}</td>
     </tr>
     {% endfor %}
   </table>
 
   <div class="sums">
-    <div><span>Total</span><span class="num">{{ sale.total|floatformat:2 }}</span></div>
+    <div><span>Total</span><span class="num">{{ sale.total|amount }}</span></div>
     {% for p in sale.payments.all %}
     <div><span>{{ p.get_method_display }}{% if p.mpesa_receipt %} · {{ p.mpesa_receipt }}{% endif %}</span>
-         <span class="num">{{ p.amount|floatformat:2 }}</span></div>
+         <span class="num">{{ p.amount|amount }}</span></div>
     {% endfor %}
     {% if sale.balance > 0 %}
-    <div class="grand owing"><span>Balance due</span><span>{{ sale.balance|floatformat:2 }}</span></div>
+    <div class="grand owing"><span>Balance due</span><span>{{ sale.balance|amount }}</span></div>
     {% else %}
-    <div class="grand"><span>Paid</span><span>{{ sale.total|floatformat:2 }}</span></div>
+    <div class="grand"><span>Paid</span><span>{{ sale.total|amount }}</span></div>
     {% endif %}
   </div>
 

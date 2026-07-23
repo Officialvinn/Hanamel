@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load money %}
 {% block title %}Sales — Hanamel{% endblock %}
 {% block content %}
 <div class="head">
@@ -9,14 +10,14 @@
 {% if sales %}
 <table>
   <tr><th>Number</th><th>Customer</th><th class="hide-sm">Items</th>
-      <th class="hide-sm">When</th><th class="r">Total</th></tr>
+      <th class="hide-sm">When</th><th class="r">Total (KSh)</th></tr>
   {% for s in sales %}
   <tr>
     <td class="num"><a href="{% url 'sale_detail' s.pk %}">{{ s.number }}</a></td>
     <td>{{ s.customer_name|default:"Walk-in" }}</td>
     <td class="meta hide-sm">{{ s.items.count }}</td>
     <td class="meta hide-sm">{{ s.date|date:"j M Y, H:i" }}</td>
-    <td class="r num">{{ s.total|floatformat:2 }}</td>
+    <td class="r num">{{ s.total|amount }}</td>
   </tr>
   {% endfor %}
 </table>
