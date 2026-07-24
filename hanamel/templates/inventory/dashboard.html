@@ -19,6 +19,7 @@
 {% if low_stock %}
 <h2>Running low</h2>
 <div class="panel">
+<div class="table-wrap">
 <table>
   <tr><th>Item</th><th class="r">In stock</th><th class="r hide-sm">Reorder at</th></tr>
   {% for p in low_stock %}
@@ -29,6 +30,7 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 </div>
 {% endif %}
 

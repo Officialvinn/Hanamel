@@ -14,12 +14,13 @@
 </div>
 
 <div class="panel">
+<div class="table-wrap">
 <table>
   <tr><th>Item</th><th class="r hide-sm">Board feet</th><th class="r">Rate/bd ft (KSh)</th>
       <th class="r">Qty</th><th class="r">Amount (KSh)</th></tr>
   {% for it in sale.items.all %}
   <tr>
-    <td><span class="size">{{ it.product }}</span></td>
+    <td style="min-width:120px"><span class="size">{{ it.product }}</span></td>
     <td class="r num hide-sm">{{ it.board_feet_per_piece|default:"—" }}</td>
     <td class="r num">{{ it.rate|amount }}</td>
     <td class="r num">{{ it.qty|floatformat:0 }}</td>
@@ -27,6 +28,7 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 <div class="tot" style="padding:15px 14px;border-top:2px solid var(--ink);display:flex;justify-content:space-between;align-items:baseline">
   <span style="font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Total</span>
   <span class="num" style="font-size:1.5rem;font-weight:600">{{ sale.total|money }}</span>

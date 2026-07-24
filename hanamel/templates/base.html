@@ -28,6 +28,7 @@
   --r:3px;
 }
 *{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
   font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
 a{color:var(--mark);text-decoration:none}
@@ -86,6 +87,8 @@ h2{font-size:.72rem;font-family:var(--mono);font-weight:600;letter-spacing:.13em
 
 /* ---- tables ---- */
 table{width:100%;border-collapse:collapse;background:var(--card)}
+.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.table-wrap table{min-width:min-content}
 th{font-family:var(--mono);font-size:.66rem;letter-spacing:.11em;text-transform:uppercase;
   color:var(--ink-soft);text-align:left;padding:11px 14px;background:#FBFDFC;
   border-bottom:1px solid var(--rule);font-weight:600;white-space:nowrap}
@@ -133,8 +136,9 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
   .topbar nav a{padding:12px 0;font-size:.88rem}
   .wrap{padding:20px 14px 60px}
   .hide-sm{display:none}
-  th,td{padding:10px 9px;font-size:.86rem}
+  th,td{padding:9px 8px;font-size:.82rem}
   .cs{width:62px}
+  .size{font-size:.86rem;line-height:1.25}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 {% block css %}{% endblock %}

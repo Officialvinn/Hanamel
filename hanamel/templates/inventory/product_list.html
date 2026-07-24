@@ -15,6 +15,7 @@
 {% for g in timber_groups %}
 <h2>{{ g.species }}</h2>
 <div class="panel">
+<div class="table-wrap">
 <table>
   <tr><th class="hide-sm">Section</th><th>Size</th><th class="r hide-sm">Board feet</th>
       <th class="r">Per piece (KSh)</th><th class="r">Stock</th></tr>
@@ -40,6 +41,7 @@
   {% endfor %}
 </table>
 </div>
+</div>
 {% empty %}
 <h2>Timber</h2>
 <div class="panel">
@@ -51,6 +53,7 @@
 {% if finished %}
 <h2>Finished products</h2>
 <div class="panel">
+<div class="table-wrap">
 <table>
   <tr><th>Item</th><th class="r">Price (KSh)</th><th class="r">Stock</th></tr>
   {% for p in finished %}
@@ -65,6 +68,7 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 </div>
 {% endif %}
 {% endblock %}

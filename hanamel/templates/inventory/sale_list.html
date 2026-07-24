@@ -8,6 +8,7 @@
 </div>
 <div class="panel">
 {% if sales %}
+<div class="table-wrap">
 <table>
   <tr><th>Number</th><th>Customer</th><th class="hide-sm">Items</th>
       <th class="hide-sm">When</th><th class="r">Total (KSh)</th></tr>
@@ -21,6 +22,7 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 {% else %}
 <div class="empty"><p>No sales yet.</p>
 <a href="{% url 'sale_create' %}" class="btn">Record the first sale</a></div>
