@@ -1,7 +1,7 @@
 """Seed Hanamel's commonly-sold timber sizes.
 
 Sizes are WIDTH x THICKNESS in inches, LENGTH in feet.
-Run:  python manage.py seed_products --species Cypress --rate 90000
+Run:  python manage.py seed_products --species Cypress --rate 280
 Safe to re-run: it updates existing rows rather than duplicating them.
 """
 from decimal import Decimal
@@ -31,7 +31,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--species", default="Cypress")
         parser.add_argument("--rate", type=Decimal, required=True,
-                            help="Rate per cubic metre, e.g. 90000")
+                            help="Rate per board foot, e.g. 280")
 
     def handle(self, *args, **opts):
         species, rate = opts["species"], opts["rate"]
@@ -42,10 +42,10 @@ class Command(BaseCommand):
                 width=Decimal(w),
                 thickness=Decimal(t),
                 length=Decimal(l),
-                defaults={"name": species, "rate_per_m3": rate},
+                defaults={"name": species, "rate_per_board_foot": rate},
             )
             verb = "created" if created else "updated"
             self.stdout.write(
-                f"{verb:8} {obj}  vol={obj.volume_m3} m3  price/piece={obj.unit_price()}"
+                f"{verb:8} {obj}  {obj.board_feet} bd ft  price/piece={obj.unit_price()}"
             )
         self.stdout.write(self.style.SUCCESS(f"\n{len(COMMON_SIZES)} sizes seeded for {species}."))

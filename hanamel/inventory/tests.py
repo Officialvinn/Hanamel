@@ -8,30 +8,31 @@ from .models import Product, Sale, SaleItem
 
 
 class TimberMathTests(TestCase):
-    def test_volume_and_price(self):
+    def test_board_feet_and_price(self):
         p = Product.objects.create(
             type=Product.TIMBER, name="Cypress", species="Cypress",
             width=Decimal("6"), thickness=Decimal("2"), length=Decimal("9"),
-            rate_per_m3=Decimal("90000"), stock_qty=Decimal("50"))
-        self.assertEqual(p.volume_m3, Decimal("0.02124"))
-        self.assertEqual(p.unit_price(), Decimal("1911.60"))
+            rate_per_board_foot=Decimal("280"), stock_qty=Decimal("50"))
+        # (6 x 2 x 9) / 12 = 9 board feet, at 280 = 2,520
+        self.assertEqual(p.board_feet, Decimal("9"))
+        self.assertEqual(p.unit_price(), Decimal("2520.00"))
 
-    def test_equal_volume_sizes_price_the_same(self):
-        """12x2x9, 6x4x9 and 6x2x18 share a volume, so volume pricing ties them."""
+    def test_equal_board_feet_sizes_price_the_same(self):
+        """12x2x9, 6x4x9 and 6x2x18 are all 18 board feet."""
         sizes = [(12, 2, 9), (6, 4, 9), (6, 2, 18)]
         prices = set()
         for w, t, l in sizes:
             p = Product.objects.create(
                 type=Product.TIMBER, name="Cypress", species="Cypress",
                 width=Decimal(w), thickness=Decimal(t), length=Decimal(l),
-                rate_per_m3=Decimal("90000"))
+                rate_per_board_foot=Decimal("280"))
             prices.add(p.unit_price())
         self.assertEqual(len(prices), 1)
 
     def test_finished_product_uses_fixed_price(self):
         p = Product.objects.create(type=Product.FINISHED, name="Dining Table",
                                    price=Decimal("35000"))
-        self.assertIsNone(p.volume_m3)
+        self.assertIsNone(p.board_feet)
         self.assertEqual(p.unit_price(), Decimal("35000"))
 
 
@@ -42,7 +43,7 @@ class SaleFlowTests(TestCase):
         self.timber = Product.objects.create(
             type=Product.TIMBER, name="Cypress", species="Cypress",
             width=Decimal("6"), thickness=Decimal("2"), length=Decimal("9"),
-            rate_per_m3=Decimal("90000"), stock_qty=Decimal("50"))
+            rate_per_board_foot=Decimal("280"), stock_qty=Decimal("50"))
         self.table = Product.objects.create(
             type=Product.FINISHED, name="Dining Table",
             price=Decimal("35000"), stock_qty=Decimal("4"))
@@ -66,8 +67,8 @@ class SaleFlowTests(TestCase):
 
         sale = Sale.objects.get()
         self.assertEqual(sale.number, f"SAL-{sale.date.year}-0001")
-        # 10 * 0.02124 m3 * 90000 = 19116.00, plus a 35000 table
-        self.assertEqual(sale.total, Decimal("54116.00"))
+        # 10 pieces x 9 board feet x 280 = 25,200, plus a 35,000 table
+        self.assertEqual(sale.total, Decimal("60200.00"))
 
         self.timber.refresh_from_db()
         self.table.refresh_from_db()
@@ -79,12 +80,12 @@ class SaleFlowTests(TestCase):
             "product_id": [str(self.timber.pk)], "qty": ["5"]})
         line = Sale.objects.get().items.get()
 
-        self.timber.rate_per_m3 = Decimal("120000")
+        self.timber.rate_per_board_foot = Decimal("400")
         self.timber.save()
         line.refresh_from_db()
 
-        self.assertEqual(line.rate, Decimal("90000"))       # history intact
-        self.assertEqual(line.amount, Decimal("9558.00"))
+        self.assertEqual(line.rate, Decimal("280"))         # history intact
+        self.assertEqual(line.amount, Decimal("12600.00"))  # 5 x 9bf x 280
 
     def test_oversell_is_refused_and_nothing_changes(self):
         r = self.client.post(reverse("sale_create"), {
@@ -123,7 +124,7 @@ class PaymentAndInvoiceTests(TestCase):
         self.timber = Product.objects.create(
             type=Product.TIMBER, name="Mahogany", species="Mahogany",
             width=Decimal("6"), thickness=Decimal("2"), length=Decimal("9"),
-            rate_per_m3=Decimal("200000"), stock_qty=Decimal("50"))
+            rate_per_board_foot=Decimal("280"), stock_qty=Decimal("50"))
 
     def _sale(self, **extra):
         data = {"product_id": [str(self.timber.pk)], "qty": ["2"]}
@@ -291,3 +292,52 @@ class MoneyFilterTests(TestCase):
         sale.recalculate_total()
         r = self.client.get(reverse("dashboard"))
         self.assertContains(r, "KSh 1,250,000")
+
+
+class BoardFootPricingTests(TestCase):
+    """The yard's own formula: (width x thickness x length_ft) / 12 x rate."""
+
+    def _timber(self, w, t, l, rate="280"):
+        return Product.objects.create(
+            type=Product.TIMBER, name="Cypress", species="Cypress",
+            width=Decimal(w), thickness=Decimal(t), length=Decimal(l),
+            rate_per_board_foot=Decimal(rate), stock_qty=Decimal("40"))
+
+    def test_the_worked_example(self):
+        """(12 x 2 x 9) / 12 x 280 = 5,040."""
+        p = self._timber(12, 2, 9)
+        self.assertEqual(p.board_feet, Decimal("18"))
+        self.assertEqual(p.unit_price(), Decimal("5040.00"))
+
+    def test_every_common_size(self):
+        expected = {
+            (12, 2, 9): ("18", "5040.00"),
+            (12, 2, 18): ("36", "10080.00"),
+            (12, 4, 18): ("72", "20160.00"),
+            (8, 4, 9): ("24", "6720.00"),
+            (8, 4, 18): ("48", "13440.00"),
+            (6, 4, 9): ("18", "5040.00"),
+            (6, 4, 18): ("36", "10080.00"),
+            (6, 2, 9): ("9", "2520.00"),
+            (6, 2, 18): ("18", "5040.00"),
+        }
+        for (w, t, l), (bf, price) in expected.items():
+            p = self._timber(w, t, l)
+            self.assertEqual(p.board_feet, Decimal(bf), f"{w}x{t}x{l} board feet")
+            self.assertEqual(p.unit_price(), Decimal(price), f"{w}x{t}x{l} price")
+
+    def test_board_feet_snapshot_survives_a_rate_change(self):
+        User.objects.create_user("s2", password="pw12345!")
+        self.client.login(username="s2", password="pw12345!")
+        p = self._timber(12, 2, 9)
+        self.client.post(reverse("sale_create"),
+                         {"product_id": [str(p.pk)], "qty": ["3"]})
+        line = Sale.objects.get().items.get()
+        self.assertEqual(line.board_feet_per_piece, Decimal("18"))
+        self.assertEqual(line.amount, Decimal("15120.00"))   # 3 x 18 x 280
+
+        p.rate_per_board_foot = Decimal("320")
+        p.save()
+        line.refresh_from_db()
+        self.assertEqual(line.rate, Decimal("280"))
+        self.assertEqual(line.amount, Decimal("15120.00"))

@@ -13,7 +13,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .models import BusinessProfile, Payment, Product, Sale, SaleItem
-from .templatetags.money import CURRENCY
 
 
 def _next_sale_number():
@@ -147,8 +146,8 @@ def sale_create(request):
                         sale=sale,
                         product=prod,
                         qty=qty,
-                        volume_per_piece=prod.volume_m3 if is_timber else None,
-                        rate=prod.rate_per_m3 if is_timber else prod.price,
+                        board_feet_per_piece=prod.board_feet if is_timber else None,
+                        rate=prod.rate_per_board_foot if is_timber else prod.price,
                     )
                     prod.stock_qty = prod.stock_qty - qty
                     prod.save(update_fields=["stock_qty"])
@@ -175,7 +174,7 @@ def sale_create(request):
                 "catalog_json": _catalog_json(products), "methods": Payment.METHOD_CHOICES,
                 "page": "new", "customer_name": customer})
 
-        messages.success(request, f"Recorded {sale.number} — {CURRENCY} {sale.total:,.2f}")
+        messages.success(request, f"Recorded {sale.number} — KES {sale.total:,.2f}")
         return redirect("sale_detail", pk=sale.pk)
 
     return render(request, "inventory/sale_form.html", {
@@ -203,7 +202,7 @@ def _catalog_json(products):
         "type": p.type,
         "unit_price": float(p.unit_price() or 0),
         "stock": float(p.stock_qty),
-        "volume": float(p.volume_m3) if p.volume_m3 else None,
+        "board_feet": float(p.board_feet) if p.board_feet else None,
     } for p in products])
 
 
@@ -279,8 +278,7 @@ def export_month(request, year, month):
         ws["A3"].font = body
 
     cols = ["Date", "Invoice no.", "Customer", "Items",
-            f"Total ({CURRENCY})", f"Paid ({CURRENCY})", f"Balance ({CURRENCY})",
-            "Payment method", "M-Pesa ref"]
+            "Total (KES)", "Paid (KES)", "Balance (KES)", "Payment method", "M-Pesa ref"]
     write_header(ws, cols)
 
     r = 5
@@ -318,7 +316,7 @@ def export_month(request, year, month):
     ws2["A1"] = f"Line detail — {start.strftime('%B %Y')}"
     ws2["A1"].font = title
     cols2 = ["Date", "Invoice no.", "Customer", "Item", "Species", "Size",
-             "Volume m³/pc", "Qty", f"Rate ({CURRENCY})", f"Amount ({CURRENCY})"]
+             "Volume m³/pc", "Qty", "Rate (KES)", "Amount (KES)"]
     write_header(ws2, cols2)
 
     r = 5
@@ -329,7 +327,7 @@ def export_month(request, year, month):
                     if p.type == Product.TIMBER and p.width else "")
             values = [s.date.strftime("%Y-%m-%d"), s.number,
                       s.customer_name or "Walk-in", p.name, p.species or "", size,
-                      float(it.volume_per_piece) if it.volume_per_piece else "",
+                      float(it.board_feet_per_piece) if it.board_feet_per_piece else "",
                       float(it.qty), float(it.rate), float(it.amount)]
             for c, v in enumerate(values, start=1):
                 cell = ws2.cell(row=r, column=c, value=v)
@@ -337,7 +335,7 @@ def export_month(request, year, month):
                 if c in (9, 10):
                     cell.number_format = money
                 if c == 7 and v != "":
-                    cell.number_format = '0.00000'
+                    cell.number_format = '0.###'
             r += 1
     if r > 5:
         cell = ws2.cell(row=r, column=9, value="TOTAL")

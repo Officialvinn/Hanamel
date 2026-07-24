@@ -26,15 +26,15 @@
   <table>
     <tr>
       <th>Description</th>
-      <th class="r">Volume m³</th>
-      <th class="r">Rate (KSh)</th>
+      <th class="r">Board feet</th>
+      <th class="r">Rate/bd ft (KSh)</th>
       <th class="r">Qty</th>
       <th class="r">Amount (KSh)</th>
     </tr>
     {% for it in sale.items.all %}
     <tr>
       <td>{{ it.product }}</td>
-      <td class="r num">{{ it.volume_per_piece|default:"—" }}</td>
+      <td class="r num">{{ it.board_feet_per_piece|default:"—" }}</td>
       <td class="r num">{{ it.rate|amount }}</td>
       <td class="r num">{{ it.qty|floatformat:0 }}</td>
       <td class="r num">{{ it.amount|amount }}</td>

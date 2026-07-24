@@ -21,10 +21,10 @@ class Product(models.Model):
         help_text="Fixed price. Finished products only.",
     )
 
-    # Timber: the rate quoted per cubic metre. Finished products leave null.
-    rate_per_m3 = models.DecimalField(
+    # Timber: the rate quoted per board foot. Finished products leave null.
+    rate_per_board_foot = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
-        help_text="Rate per cubic metre. Timber only.",
+        help_text="Rate per board foot, e.g. 280. Timber only.",
     )
 
     # Timber dimensions. UNITS: thickness & width in INCHES, length in FEET.
@@ -41,8 +41,20 @@ class Product(models.Model):
     FOOT_TO_M = Decimal("0.3048")
 
     @property
+    def board_feet(self):
+        """Board feet in ONE piece: (width_in x thickness_in x length_ft) / 12.
+        This is how the yard quotes, so it is the basis for pricing."""
+        if self.type != self.TIMBER:
+            return None
+        if None in (self.thickness, self.width, self.length):
+            return None
+        bf = (self.width * self.thickness * self.length) / Decimal("12")
+        return bf.quantize(Decimal("0.001")).normalize()
+
+    @property
     def volume_m3(self):
-        """Volume of ONE piece in m3. Width & thickness in INCHES, length in FEET."""
+        """Cubic metres per piece. Not used for pricing — kept because
+        customers occasionally ask for volume."""
         if self.type != self.TIMBER:
             return None
         if None in (self.thickness, self.width, self.length):
@@ -56,10 +68,10 @@ class Product(models.Model):
         """Price of one unit, whichever product type this is."""
         if self.type == self.FINISHED:
             return self.price
-        vol = self.volume_m3
-        if vol is None or self.rate_per_m3 is None:
+        bf = self.board_feet
+        if bf is None or self.rate_per_board_foot is None:
             return None
-        return (vol * self.rate_per_m3).quantize(Decimal("0.01"))
+        return (bf * self.rate_per_board_foot).quantize(Decimal("0.01"))
 
     def __str__(self):
         if self.type == self.TIMBER:
@@ -105,14 +117,16 @@ class SaleItem(models.Model):
     qty = models.DecimalField(max_digits=10, decimal_places=2)
 
     # snapshots at time of sale — these freeze the sale's history
-    volume_per_piece = models.DecimalField(max_digits=10, decimal_places=5, null=True, blank=True)
+    board_feet_per_piece = models.DecimalField(max_digits=10, decimal_places=3,
+                                               null=True, blank=True)
     rate = models.DecimalField(max_digits=12, decimal_places=2)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     def save(self, *args, **kwargs):
-        if self.volume_per_piece:  # timber
-            self.amount = (self.qty * self.volume_per_piece * self.rate).quantize(Decimal("0.01"))
-        else:                      # finished product
+        if self.board_feet_per_piece:  # timber
+            self.amount = (self.qty * self.board_feet_per_piece
+                           * self.rate).quantize(Decimal("0.01"))
+        else:                          # finished product
             self.amount = (self.qty * self.rate).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
