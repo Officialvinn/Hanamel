@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from datetime import datetime, timedelta
 from itertools import groupby
 from decimal import Decimal, InvalidOperation
@@ -8,12 +10,17 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import TruncMonth
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
-from .models import (BusinessProfile, Payment, Product, Sale, SaleItem,
-                     StockMovement)
+from .models import (BusinessProfile, MpesaTransaction, Payment, Product, Sale,
+                     SaleItem, StockMovement)
+from .mpesa import normalise_ref, parse_confirmation
+
+mpesa_log = logging.getLogger("mpesa")
 
 
 def _next_sale_number():
@@ -444,3 +451,121 @@ def site_manifest(request):
 def service_worker(request):
     """Served from the site root so its scope covers the whole app."""
     return render(request, "pwa/sw.js", content_type="application/javascript")
+
+
+# --- M-Pesa C2B ------------------------------------------------------------
+
+def _client_ip(request):
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return fwd.split(",")[0].strip() if fwd else request.META.get("REMOTE_ADDR", "")
+
+
+def _safaricom_only(request):
+    """Optional IP allowlist. Safaricom doesn't sign callbacks, so restricting
+    by source address is the main defence against forged payments.
+    Set MPESA_ALLOWED_IPS to a comma-separated list to switch it on."""
+    allowed = [ip.strip() for ip in
+               os.environ.get("MPESA_ALLOWED_IPS", "").split(",") if ip.strip()]
+    if not allowed:
+        return True
+    return _client_ip(request) in allowed
+
+
+@csrf_exempt
+@require_POST
+def mpesa_validation(request):
+    """Safaricom asks whether to allow a payment. We accept everything —
+    refusing money at the till would be worse than an unmatched record."""
+    if not _safaricom_only(request):
+        return JsonResponse({"ResultCode": "C2B00016", "ResultDesc": "Rejected"})
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+
+@csrf_exempt
+@require_POST
+def mpesa_confirmation(request):
+    """Safaricom telling us money has arrived. Store it first, match second —
+    and always answer 200, or Safaricom retries and we get duplicates."""
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except (ValueError, UnicodeDecodeError):
+        payload = {}
+
+    if not _safaricom_only(request):
+        mpesa_log.warning("Rejected confirmation from %s", _client_ip(request))
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+    try:
+        fields = parse_confirmation(payload)
+        if not fields["trans_id"] or fields["amount"] is None:
+            mpesa_log.warning("Confirmation missing TransID or amount: %s", payload)
+            return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+        with transaction.atomic():
+            txn, created = MpesaTransaction.objects.get_or_create(
+                trans_id=fields["trans_id"],
+                defaults={**fields, "raw": payload},
+            )
+            if created:
+                _try_match(txn)
+    except Exception:                       # never let an error cause a retry storm
+        mpesa_log.exception("Failed handling confirmation: %s", payload)
+
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+
+def _try_match(txn, user=None, sale=None):
+    """Attach a transaction to a sale and record the payment.
+    Returns True if it matched."""
+    if txn.sale_id:
+        return True
+    if sale is None:
+        ref = normalise_ref(txn.bill_ref)
+        if not ref:
+            return False
+        sale = next((s for s in Sale.objects.filter(number__isnull=False)
+                     if normalise_ref(s.number) == ref), None)
+        automatic = True
+    else:
+        automatic = False
+    if sale is None:
+        return False
+
+    payment = Payment.objects.create(
+        sale=sale, method=Payment.MPESA, amount=txn.amount,
+        mpesa_receipt=txn.trans_id, received_at=txn.trans_time or timezone.now(),
+        note=txn.payer_name[:140])
+    txn.sale = sale
+    txn.payment = payment
+    txn.matched_automatically = automatic
+    txn.matched_at = timezone.now()
+    txn.matched_by = user
+    txn.save(update_fields=["sale", "payment", "matched_automatically",
+                            "matched_at", "matched_by"])
+    return True
+
+
+@login_required
+def mpesa_reconcile(request):
+    """Payments Safaricom told us about that aren't attached to a sale yet."""
+    if request.method == "POST":
+        txn = get_object_or_404(MpesaTransaction, pk=request.POST.get("txn"))
+        sale_number = request.POST.get("sale_number", "").strip()
+        sale = next((s for s in Sale.objects.all()
+                     if normalise_ref(s.number) == normalise_ref(sale_number)), None)
+        if txn.sale_id:
+            messages.error(request, f"{txn.trans_id} is already matched.")
+        elif sale is None:
+            messages.error(request, f"No sale found matching '{sale_number}'.")
+        else:
+            _try_match(txn, user=request.user, sale=sale)
+            messages.success(request, f"{txn.trans_id} matched to {sale.number}.")
+        return redirect("mpesa_reconcile")
+
+    unmatched = MpesaTransaction.objects.filter(sale__isnull=True)
+    recent = (MpesaTransaction.objects.filter(sale__isnull=False)
+              .select_related("sale")[:25])
+    unpaid = [s for s in Sale.objects.order_by("-date")[:80] if s.balance > 0]
+    return render(request, "inventory/mpesa_reconcile.html", {
+        "unmatched": unmatched, "recent": recent, "unpaid": unpaid,
+        "page": "mpesa"})

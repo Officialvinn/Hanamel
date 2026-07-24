@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -454,3 +455,169 @@ class StockUpdateTests(TestCase):
     def test_stock_update_requires_login(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("stock_update")).status_code, 302)
+
+
+class MpesaC2BTests(TestCase):
+    """Safaricom's callback is the only thing that may record money."""
+
+    def setUp(self):
+        from .models import MpesaTransaction
+        self.MT = MpesaTransaction
+        self.user = User.objects.create_user("yardstaff", password="pw12345!")
+        self.product = Product.objects.create(
+            type=Product.TIMBER, name="Cypress", species="Cypress",
+            width=Decimal("12"), thickness=Decimal("2"), length=Decimal("9"),
+            rate_per_board_foot=Decimal("280"), stock_qty=Decimal("40"))
+        self.sale = Sale.objects.create(number="SAL-2026-0042",
+                                        customer_name="Kamau Hardware")
+        SaleItem.objects.create(sale=self.sale, product=self.product,
+                                qty=Decimal("1"), board_feet_per_piece=Decimal("18"),
+                                rate=Decimal("280"))
+        self.sale.recalculate_total()          # 5,040
+
+    def _post(self, **over):
+        payload = {
+            "TransactionType": "Pay Bill",
+            "TransID": "SFG4H2K9LM",
+            "TransTime": "20260724143000",
+            "TransAmount": "5040.00",
+            "BusinessShortCode": "123456",
+            "BillRefNumber": "SAL-2026-0042",
+            "MSISDN": "2547XXXXX678",
+            "FirstName": "JOHN",
+            "LastName": "KAMAU",
+        }
+        payload.update(over)
+        return self.client.post(reverse("mpesa_confirmation"),
+                                data=json.dumps(payload),
+                                content_type="application/json")
+
+    def test_confirmation_records_and_matches_the_payment(self):
+        r = self._post()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["ResultCode"], 0)
+
+        txn = self.MT.objects.get()
+        self.assertEqual(txn.trans_id, "SFG4H2K9LM")
+        self.assertEqual(txn.amount, Decimal("5040.00"))
+        self.assertEqual(txn.payer_name, "JOHN KAMAU")
+        self.assertEqual(txn.sale, self.sale)
+        self.assertTrue(txn.matched_automatically)
+
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.amount_paid, Decimal("5040.00"))
+        self.assertTrue(self.sale.is_paid)
+        payment = self.sale.payments.get()
+        self.assertEqual(payment.method, "mpesa")
+        self.assertEqual(payment.mpesa_receipt, "SFG4H2K9LM")
+
+    def test_repeated_callbacks_do_not_double_pay(self):
+        """Safaricom retries if it doesn't get a clean 200."""
+        for _ in range(4):
+            self.assertEqual(self._post().status_code, 200)
+        self.assertEqual(self.MT.objects.count(), 1)
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.payments.count(), 1)
+        self.assertEqual(self.sale.amount_paid, Decimal("5040.00"))
+
+    def test_loosely_typed_account_numbers_still_match(self):
+        for ref in ["sal 2026 0042", "SAL20260042", " sal-2026-0042 "]:
+            Sale.objects.filter(number="SAL-2026-0042").update()
+            self.MT.objects.all().delete()
+            self.sale.payments.all().delete()
+            self._post(TransID=f"T{abs(hash(ref)) % 10**8}", BillRefNumber=ref)
+            self.assertTrue(self.MT.objects.get().is_matched, ref)
+
+    def test_wrong_account_number_is_kept_but_unmatched(self):
+        self._post(BillRefNumber="NONSENSE")
+        txn = self.MT.objects.get()
+        self.assertFalse(txn.is_matched)
+        self.assertEqual(txn.amount, Decimal("5040.00"))   # money is never lost
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.amount_paid, Decimal("0.00"))
+
+    def test_partial_payment_leaves_the_balance(self):
+        self._post(TransAmount="2000.00")
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.amount_paid, Decimal("2000.00"))
+        self.assertEqual(self.sale.balance, Decimal("3040.00"))
+        self.assertFalse(self.sale.is_paid)
+
+    def test_malformed_payload_still_answers_200(self):
+        """Anything but a 200 makes Safaricom retry forever."""
+        r = self.client.post(reverse("mpesa_confirmation"),
+                             data="not json at all",
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.MT.objects.count(), 0)
+
+    def test_missing_transid_is_ignored_not_stored(self):
+        self._post(TransID="")
+        self.assertEqual(self.MT.objects.count(), 0)
+
+    def test_validation_endpoint_accepts(self):
+        r = self.client.post(reverse("mpesa_validation"),
+                             data=json.dumps({}), content_type="application/json")
+        self.assertEqual(r.json()["ResultCode"], 0)
+
+    def test_callbacks_need_no_login_or_csrf_token(self):
+        """Safaricom has neither a session nor a CSRF token."""
+        self.assertEqual(self._post().status_code, 200)
+
+    def test_manual_matching_from_the_reconcile_page(self):
+        self._post(BillRefNumber="TYPO")
+        txn = self.MT.objects.get()
+        self.assertFalse(txn.is_matched)
+
+        self.client.login(username="yardstaff", password="pw12345!")
+        self.client.post(reverse("mpesa_reconcile"),
+                         {"txn": txn.pk, "sale_number": "SAL-2026-0042"})
+        txn.refresh_from_db()
+        self.assertTrue(txn.is_matched)
+        self.assertFalse(txn.matched_automatically)
+        self.assertEqual(txn.matched_by, self.user)
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.amount_paid, Decimal("5040.00"))
+
+    def test_cannot_match_the_same_payment_twice(self):
+        self._post()
+        txn = self.MT.objects.get()
+        self.client.login(username="yardstaff", password="pw12345!")
+        self.client.post(reverse("mpesa_reconcile"),
+                         {"txn": txn.pk, "sale_number": "SAL-2026-0042"})
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.payments.count(), 1)
+
+    def test_reconcile_page_requires_login(self):
+        self.assertEqual(self.client.get(reverse("mpesa_reconcile")).status_code, 302)
+
+
+class FeatureFlagTests(TestCase):
+    def setUp(self):
+        User.objects.create_user("s4", password="pw12345!")
+        self.client.login(username="s4", password="pw12345!")
+
+    def test_mpesa_hidden_from_nav_until_configured(self):
+        import os
+        old = os.environ.pop("MPESA_CONSUMER_KEY", None)
+        try:
+            html = self.client.get(reverse("dashboard")).content.decode()
+            self.assertNotIn(">M-Pesa<", html)
+        finally:
+            if old is not None:
+                os.environ["MPESA_CONSUMER_KEY"] = old
+
+    def test_mpesa_appears_once_credentials_are_set(self):
+        import os
+        os.environ["MPESA_CONSUMER_KEY"] = "test-key"
+        try:
+            html = self.client.get(reverse("dashboard")).content.decode()
+            self.assertIn(">M-Pesa<", html)
+        finally:
+            os.environ.pop("MPESA_CONSUMER_KEY", None)
+
+    def test_the_page_itself_still_works_when_hidden(self):
+        """Hidden from the nav, not disabled — you can still reach it directly."""
+        import os
+        os.environ.pop("MPESA_CONSUMER_KEY", None)
+        self.assertEqual(self.client.get(reverse("mpesa_reconcile")).status_code, 200)

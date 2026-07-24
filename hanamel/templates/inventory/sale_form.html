@@ -3,6 +3,10 @@
 {% block title %}Record sale — Hanamel{% endblock %}
 {% block css %}
 .builder{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+/* nothing selected yet: no sidebar, no payment fields, pickers get the full width */
+.builder:not(.has-items){grid-template-columns:1fr}
+.builder:not(.has-items) .cart,
+.builder:not(.has-items) .settle{display:none}
 .picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
 .chip{position:relative;background:var(--card);border:1px solid var(--rule);
   border-radius:var(--r);padding:12px;cursor:pointer;text-align:left;
@@ -25,8 +29,10 @@
   font-variant-numeric:tabular-nums}
 .chip .st{font-family:var(--mono);font-size:.66rem;color:var(--ink-soft)}
 .chip .st.low{color:var(--oxide);font-weight:600}
-.cart{position:sticky;top:20px}
+.cart{position:sticky;top:76px}
 .cart-body{padding:4px 0;max-height:46vh;overflow-y:auto}
+.cart-title{font-family:var(--mono);font-size:.64rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-soft);padding:12px 14px 2px}
 .line{display:grid;grid-template-columns:1fr 78px auto;gap:9px;align-items:center;
   padding:11px 14px;border-bottom:1px solid var(--rule)}
 .line:last-child{border-bottom:none}
@@ -51,7 +57,8 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
 .cart-empty{padding:34px 16px;text-align:center;color:var(--ink-soft);font-size:.86rem}
 @media (max-width:860px){
   .builder{grid-template-columns:1fr}
-  .cart{position:static;border-bottom:none}
+  /* what you've picked belongs above the picker, not buried under it */
+  .cart{order:-1;position:sticky;top:0;z-index:15;border-bottom:none}
   /* keep the total and the confirm button in reach while picking items */
   .settle{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);
     border-top:1px solid var(--rule);box-shadow:0 -6px 20px rgba(0,0,0,.09)}
@@ -113,8 +120,9 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
     </div>
 
     <aside class="panel cart">
+      <div class="cart-title">In this sale</div>
       <div class="cart-body" id="lines">
-        <div class="cart-empty" id="cartempty">No items yet.<br>Tap a size to start.</div>
+        <span id="cartempty" hidden></span>
       </div>
       <div class="settle">
         <div class="tot">
@@ -155,6 +163,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
   ({{ catalog_json|safe }}).forEach(function(p){ CAT[p.id] = p; });
 
   var cart = [];                      // [{id, qty}]
+  var builder = document.querySelector('.builder');
   var linesEl = document.getElementById('lines');
   var emptyEl = document.getElementById('cartempty');
   var totalEl = document.getElementById('total');
@@ -211,7 +220,8 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
       row.appendChild(h1); row.appendChild(h2);
     });
 
-    emptyEl.style.display = cart.length ? 'none' : '';
+    // the whole payment side only exists once there's something to pay for
+    builder.classList.toggle('has-items', cart.length > 0);
     totalEl.textContent = money(total);
     confirmEl.disabled = cart.length === 0 || total <= 0;
 

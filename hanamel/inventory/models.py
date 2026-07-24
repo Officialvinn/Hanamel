@@ -235,3 +235,41 @@ class StockMovement(models.Model):
     def __str__(self):
         sign = "+" if self.delta >= 0 else ""
         return f"{self.product}: {sign}{self.delta} ({self.get_reason_display()})"
+
+
+class MpesaTransaction(models.Model):
+    """Every payment Safaricom tells us about, stored exactly as received.
+
+    This table is the record of what the bank says happened. Matching it to a
+    sale is a separate, reversible step — so a mis-match never loses the money.
+    """
+    trans_id = models.CharField(max_length=32, unique=True,
+                                help_text="Safaricom receipt, e.g. SFG4H2K9LM")
+    trans_time = models.DateTimeField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    msisdn = models.CharField(max_length=32, blank=True)
+    bill_ref = models.CharField(max_length=64, blank=True,
+                                help_text="Account number the customer typed")
+    payer_name = models.CharField(max_length=140, blank=True)
+    short_code = models.CharField(max_length=16, blank=True)
+    raw = models.JSONField(default=dict)
+
+    sale = models.ForeignKey(Sale, null=True, blank=True, related_name="mpesa",
+                             on_delete=models.SET_NULL)
+    payment = models.ForeignKey(Payment, null=True, blank=True,
+                                related_name="mpesa", on_delete=models.SET_NULL)
+    matched_automatically = models.BooleanField(default=False)
+    matched_at = models.DateTimeField(null=True, blank=True)
+    matched_by = models.ForeignKey("auth.User", null=True, blank=True,
+                                   on_delete=models.SET_NULL)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-trans_time", "-received_at"]
+
+    @property
+    def is_matched(self):
+        return self.sale_id is not None
+
+    def __str__(self):
+        return f"{self.trans_id} · {self.amount} · {self.bill_ref or 'no account'}"

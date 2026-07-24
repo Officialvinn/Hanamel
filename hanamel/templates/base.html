@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static features %}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -152,6 +152,10 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
     <a href="{% url 'sale_create' %}" class="{% if page == 'new' %}on{% endif %}">Record sale</a>
     <a href="{% url 'sale_list' %}" class="{% if page == 'sales' %}on{% endif %}">Sales</a>
     <a href="{% url 'product_list' %}" class="{% if page == 'stock' %}on{% endif %}">Stock</a>
+    {% mpesa_enabled as show_mpesa %}
+    {% if show_mpesa %}
+    <a href="{% url 'mpesa_reconcile' %}" class="{% if page == 'mpesa' %}on{% endif %}">M-Pesa</a>
+    {% endif %}
     <a href="{% url 'reports' %}" class="{% if page == 'reports' %}on{% endif %}">Reports</a>
   </nav>
   <span class="who hide-sm">{{ user.username }}</span>

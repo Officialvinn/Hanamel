@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}M-Pesa — Hanamel{% endblock %}
+{% block css %}
+.txn{padding:14px;border-bottom:1px solid var(--rule)}
+.txn:last-child{border-bottom:none}
+.txn-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+  flex-wrap:wrap;margin-bottom:9px}
+.txn .who{font-weight:600}
+.txn .code{font-family:var(--mono);font-size:.76rem;color:var(--ink-soft)}
+.txn .amt{font-family:var(--mono);font-size:1.05rem;font-weight:600}
+.matchform{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.matchform input{max-width:210px;padding:8px 10px;font-size:.9rem}
+.matchform .btn{padding:8px 15px;font-size:.86rem}
+.ref{font-family:var(--mono);background:var(--mark-soft);color:var(--mark-deep);
+  padding:2px 7px;border-radius:2px;font-size:.8rem}
+.hint{font-size:.78rem;color:var(--ink-soft);margin-top:6px}
+{% endblock %}
+
+{% block content %}
+<h1>M-Pesa</h1>
+<p class="sub">Payments Safaricom has confirmed. Matched ones post to the sale automatically.</p>
+
+<h2>Needs matching {% if unmatched %}({{ unmatched|length }}){% endif %}</h2>
+<div class="panel">
+{% if unmatched %}
+  {% for t in unmatched %}
+  <div class="txn">
+    <div class="txn-head">
+      <div>
+        <div class="who">{{ t.payer_name|default:"Unknown payer" }}</div>
+        <div class="code">{{ t.trans_id }} · {{ t.trans_time|date:"j M, H:i" }}
+          {% if t.bill_ref %} · typed <span class="ref">{{ t.bill_ref }}</span>{% endif %}</div>
+      </div>
+      <div class="amt">{{ t.amount|money }}</div>
+    </div>
+    <form method="post" class="matchform">
+      {% csrf_token %}
+      <input type="hidden" name="txn" value="{{ t.pk }}">
+      <input type="text" name="sale_number" list="unpaid-sales"
+             placeholder="Invoice number" autocomplete="off" required>
+      <button type="submit" class="btn">Match</button>
+    </form>
+    {% if t.bill_ref %}
+    <div class="hint">The account number they typed didn't match any invoice.</div>
+    {% else %}
+    <div class="hint">No account number was given, so this has to be matched by hand.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<div class="empty"><p>Nothing waiting. Every payment is attached to a sale.</p></div>
+{% endif %}
+</div>
+
+<datalist id="unpaid-sales">
+  {% for s in unpaid %}
+  <option value="{{ s.number }}">{{ s.customer_name|default:"Walk-in" }} — {{ s.balance|money }} owing</option>
+  {% endfor %}
+</datalist>
+
+<h2>Recently matched</h2>
+<div class="panel">
+{% if recent %}
+<table>
+  <tr><th>Receipt</th><th class="hide-sm">Payer</th><th>Invoice</th>
+      <th class="hide-sm">How</th><th class="r">Amount</th></tr>
+  {% for t in recent %}
+  <tr>
+    <td class="num">{{ t.trans_id }}</td>
+    <td class="hide-sm">{{ t.payer_name|default:"—" }}</td>
+    <td class="num"><a href="{% url 'sale_detail' t.sale.pk %}">{{ t.sale.number }}</a></td>
+    <td class="meta hide-sm">{% if t.matched_automatically %}Automatic{% else %}By hand{% endif %}</td>
+    <td class="r num">{{ t.amount|amount }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No matched payments yet.</p></div>
+{% endif %}
+</div>
+
+<p class="sub" style="margin-top:18px">
+Customers pay the Paybill and type the invoice number as the account number.
+Get that right and the payment attaches itself.</p>
+{% endblock %}

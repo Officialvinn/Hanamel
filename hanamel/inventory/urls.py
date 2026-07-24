@@ -11,6 +11,7 @@ urlpatterns = [
     path("sales/new/", views.sale_create, name="sale_create"),
     path("sales/<int:pk>/", views.sale_detail, name="sale_detail"),
     path("sales/<int:pk>/invoice/", views.sale_invoice, name="sale_invoice"),
+    path("mpesa/", views.mpesa_reconcile, name="mpesa_reconcile"),
     path("reports/", views.reports, name="reports"),
     path("reports/<int:year>/<int:month>/export/", views.export_month, name="export_month"),
     path("reports/<int:year>/<int:month>/invoices/", views.invoice_pack, name="invoice_pack"),
