@@ -380,3 +380,77 @@ class BrandingAndPwaTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("site_manifest")).status_code, 200)
         self.assertEqual(self.client.get("/sw.js").status_code, 200)
+
+
+class StockUpdateTests(TestCase):
+    def setUp(self):
+        from .models import StockMovement
+        self.SM = StockMovement
+        self.user = User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+        self.timber = Product.objects.create(
+            type=Product.TIMBER, name="Cypress", species="Cypress",
+            width=Decimal("6"), thickness=Decimal("2"), length=Decimal("9"),
+            rate_per_board_foot=Decimal("280"), stock_qty=Decimal("40"))
+        self.table = Product.objects.create(
+            type=Product.FINISHED, name="Door frame",
+            price=Decimal("8500"), stock_qty=Decimal("5"))
+
+    def test_page_loads_with_current_quantities(self):
+        r = self.client.get(reverse("stock_update"))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'value="40"')
+
+    def test_setting_a_new_quantity_records_the_delta(self):
+        self.client.post(reverse("stock_update"), {
+            "reason": "received", "note": "delivery from Kitale",
+            f"qty_{self.timber.pk}": "65",
+            f"qty_{self.table.pk}": "5"})          # unchanged
+        self.timber.refresh_from_db()
+        self.assertEqual(self.timber.stock_qty, Decimal("65"))
+
+        m = self.SM.objects.get()                  # only the changed one is logged
+        self.assertEqual(m.product, self.timber)
+        self.assertEqual(m.delta, Decimal("25"))
+        self.assertEqual(m.resulting_qty, Decimal("65"))
+        self.assertEqual(m.reason, "received")
+        self.assertEqual(m.note, "delivery from Kitale")
+        self.assertEqual(m.user, self.user)
+
+    def test_reducing_stock_records_a_negative_delta(self):
+        self.client.post(reverse("stock_update"),
+                         {"reason": "count", f"qty_{self.timber.pk}": "12"})
+        self.assertEqual(self.SM.objects.get().delta, Decimal("-28"))
+
+    def test_negative_quantity_is_refused(self):
+        self.client.post(reverse("stock_update"),
+                         {"reason": "count", f"qty_{self.timber.pk}": "-5"})
+        self.timber.refresh_from_db()
+        self.assertEqual(self.timber.stock_qty, Decimal("40"))
+        self.assertEqual(self.SM.objects.count(), 0)
+
+    def test_rubbish_input_changes_nothing(self):
+        self.client.post(reverse("stock_update"),
+                         {"reason": "count", f"qty_{self.timber.pk}": "abc"})
+        self.timber.refresh_from_db()
+        self.assertEqual(self.timber.stock_qty, Decimal("40"))
+
+    def test_a_sale_also_writes_a_movement(self):
+        self.client.post(reverse("sale_create"),
+                         {"product_id": [str(self.timber.pk)], "qty": ["4"]})
+        m = self.SM.objects.get()
+        self.assertEqual(m.reason, "sale")
+        self.assertEqual(m.delta, Decimal("-4"))
+        self.assertEqual(m.resulting_qty, Decimal("36"))
+        self.assertIsNotNone(m.sale)
+
+    def test_history_page_shows_movements(self):
+        self.client.post(reverse("stock_update"),
+                         {"reason": "received", f"qty_{self.timber.pk}": "70"})
+        r = self.client.get(reverse("stock_history", args=[self.timber.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Delivery received")
+
+    def test_stock_update_requires_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("stock_update")).status_code, 302)

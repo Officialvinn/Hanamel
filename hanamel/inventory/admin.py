@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import BusinessProfile, Payment, Product, Sale, SaleItem
+from .models import (BusinessProfile, Payment, Product, Sale, SaleItem,
+                     StockMovement)
 
 
 @admin.register(Product)
@@ -42,3 +43,11 @@ class SaleAdmin(admin.ModelAdmin):
     search_fields = ("number", "customer_name")
     inlines = [SaleItemInline, PaymentInline]
     readonly_fields = ("total",)
+
+
+@admin.register(StockMovement)
+class StockMovementAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "product", "delta", "resulting_qty", "reason", "user")
+    list_filter = ("reason", "created_at")
+    search_fields = ("product__name", "product__species", "note")
+    readonly_fields = ("created_at",)

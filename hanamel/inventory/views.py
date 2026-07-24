@@ -12,7 +12,8 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import BusinessProfile, Payment, Product, Sale, SaleItem
+from .models import (BusinessProfile, Payment, Product, Sale, SaleItem,
+                     StockMovement)
 
 
 def _next_sale_number():
@@ -57,6 +58,76 @@ def product_list(request):
     return render(request, "inventory/product_list.html", {
         "timber_groups": _timber_groups(products),
         "finished": finished, "q": q, "page": "stock"})
+
+
+@login_required
+def stock_update(request):
+    """Set stock levels. Pre-filled with current counts: change the ones that
+    moved, leave the rest. Each change is logged as a movement."""
+    products = (Product.objects.filter(is_active=True)
+                .order_by("type", "species", "-width", "-thickness", "-length"))
+
+    if request.method == "POST":
+        reason = request.POST.get("reason", StockMovement.COUNT)
+        if reason not in dict(StockMovement.REASON_CHOICES):
+            reason = StockMovement.COUNT
+        note = request.POST.get("note", "").strip()
+
+        changes, errors = [], []
+        for p in products:
+            raw = request.POST.get(f"qty_{p.pk}", "").strip()
+            if raw == "":
+                continue
+            try:
+                new_qty = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                errors.append(f"{p} — '{raw}' isn't a number.")
+                continue
+            if new_qty < 0:
+                errors.append(f"{p} — stock can't be negative.")
+                continue
+            if new_qty != p.stock_qty:
+                changes.append((p, new_qty))
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+        elif not changes:
+            messages.error(request, "Nothing changed.")
+        else:
+            with transaction.atomic():
+                ids = [p.pk for p, _ in changes]
+                locked = {p.pk: p for p in
+                          Product.objects.select_for_update().filter(pk__in=ids)}
+                for p, new_qty in changes:
+                    prod = locked[p.pk]
+                    delta = new_qty - prod.stock_qty
+                    prod.stock_qty = new_qty
+                    prod.save(update_fields=["stock_qty"])
+                    StockMovement.objects.create(
+                        product=prod, delta=delta, resulting_qty=new_qty,
+                        reason=reason, note=note,
+                        user=request.user if request.user.is_authenticated else None)
+            messages.success(
+                request,
+                f"Updated {len(changes)} item{'s' if len(changes) != 1 else ''}.")
+            return redirect("product_list")
+
+    return render(request, "inventory/stock_update.html", {
+        "timber_groups": _timber_groups(products),
+        "finished": [p for p in products if p.type == Product.FINISHED],
+        "reasons": StockMovement.REASON_CHOICES,
+        "default_reason": StockMovement.COUNT,
+        "page": "stock"})
+
+
+@login_required
+def stock_history(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    return render(request, "inventory/stock_history.html", {
+        "product": product,
+        "movements": product.movements.select_related("sale", "user")[:100],
+        "page": "stock"})
 
 
 @login_required
@@ -151,6 +222,10 @@ def sale_create(request):
                     )
                     prod.stock_qty = prod.stock_qty - qty
                     prod.save(update_fields=["stock_qty"])
+                    StockMovement.objects.create(
+                        product=prod, delta=-qty, resulting_qty=prod.stock_qty,
+                        reason=StockMovement.SALE, sale=sale,
+                        user=request.user if request.user.is_authenticated else None)
                 sale.recalculate_total()
 
                 # Record what was actually handed over. Blank means "pay in full";

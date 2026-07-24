@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}{{ product }} — history{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ product }}</h1>
+    <p class="sub">Currently {{ product.stock_qty|floatformat:0 }} in stock.</p>
+  </div>
+  <a href="{% url 'product_list' %}" class="btn btn-ghost">Back to stock</a>
+</div>
+
+<div class="panel">
+{% if movements %}
+<table>
+  <tr><th>When</th><th>Why</th><th class="hide-sm">Note</th>
+      <th class="r">Change</th><th class="r">Left</th></tr>
+  {% for m in movements %}
+  <tr>
+    <td class="meta">{{ m.created_at|date:"j M Y, H:i" }}</td>
+    <td>
+      {% if m.sale %}<a href="{% url 'sale_detail' m.sale.pk %}">{{ m.get_reason_display }}</a>
+      {% else %}{{ m.get_reason_display }}{% endif %}
+    </td>
+    <td class="meta hide-sm">{{ m.note|default:"—" }}{% if m.user %} · {{ m.user.username }}{% endif %}</td>
+    <td class="r num" style="{% if m.delta < 0 %}color:var(--oxide){% else %}color:var(--mark){% endif %};font-weight:600">
+      {% if m.delta > 0 %}+{% endif %}{{ m.delta|floatformat:0 }}
+    </td>
+    <td class="r num">{{ m.resulting_qty|floatformat:0 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty"><p>No movements recorded yet for this item.</p></div>
+{% endif %}
+</div>
+{% endblock %}

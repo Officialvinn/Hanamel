@@ -200,3 +200,38 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.get_method_display()} {self.amount}"
+
+
+class StockMovement(models.Model):
+    """Every change to a stock level, so 'why is this number what it is?'
+    always has an answer."""
+    RECEIVED = "received"
+    SALE = "sale"
+    COUNT = "count"
+    CORRECTION = "correction"
+    REASON_CHOICES = [
+        (RECEIVED, "Delivery received"),
+        (SALE, "Sold"),
+        (COUNT, "Stock take"),
+        (CORRECTION, "Correction"),
+    ]
+
+    product = models.ForeignKey(Product, related_name="movements",
+                                on_delete=models.CASCADE)
+    delta = models.DecimalField(max_digits=10, decimal_places=2,
+                                help_text="Positive for stock in, negative for out")
+    resulting_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=12, choices=REASON_CHOICES)
+    note = models.CharField(max_length=140, blank=True)
+    sale = models.ForeignKey(Sale, null=True, blank=True, related_name="movements",
+                             on_delete=models.SET_NULL)
+    user = models.ForeignKey("auth.User", null=True, blank=True,
+                             on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        sign = "+" if self.delta >= 0 else ""
+        return f"{self.product}: {sign}{self.delta} ({self.get_reason_display()})"

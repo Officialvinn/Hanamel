@@ -4,9 +4,12 @@
 {% block content %}
 <div class="head">
   <div><h1>Stock</h1><p class="sub">Prices are computed from the rate per board foot.</p></div>
-  <form method="get" style="max-width:220px">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search species…" aria-label="Search stock">
-  </form>
+  <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+    <form method="get" style="max-width:200px">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search species…" aria-label="Search stock">
+    </form>
+    <a href="{% url 'stock_update' %}" class="btn">Update stock</a>
+  </div>
 </div>
 
 {% for g in timber_groups %}
@@ -27,9 +30,11 @@
     <td class="r num hide-sm">{{ p.board_feet }}</td>
     <td class="r num">{{ p.unit_price|amount }}</td>
     <td class="r num">
+      <a href="{% url 'stock_history' p.pk %}" style="color:inherit">
       {% if p.stock_qty <= p.low_stock_threshold %}
         <span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span>
       {% else %}{{ p.stock_qty|floatformat:0 }}{% endif %}
+      </a>
     </td>
   </tr>
   {% endfor %}
