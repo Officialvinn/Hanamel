@@ -355,3 +355,17 @@ def export_month(request, year, month):
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
+
+
+# --- installable web app ---------------------------------------------------
+
+def site_manifest(request):
+    """Rendered rather than served statically so the icon URLs pick up
+    WhiteNoise's hashed filenames."""
+    return render(request, "pwa/site.webmanifest",
+                  content_type="application/manifest+json")
+
+
+def service_worker(request):
+    """Served from the site root so its scope covers the whole app."""
+    return render(request, "pwa/sw.js", content_type="application/javascript")

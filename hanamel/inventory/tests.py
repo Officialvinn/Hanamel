@@ -8,7 +8,7 @@ from .models import Product, Sale, SaleItem
 
 
 class TimberMathTests(TestCase):
-    def test_board_feet_and_price(self):
+    def test_volume_and_price(self):
         p = Product.objects.create(
             type=Product.TIMBER, name="Cypress", species="Cypress",
             width=Decimal("6"), thickness=Decimal("2"), length=Decimal("9"),
@@ -341,3 +341,42 @@ class BoardFootPricingTests(TestCase):
         line.refresh_from_db()
         self.assertEqual(line.rate, Decimal("280"))
         self.assertEqual(line.amount, Decimal("15120.00"))
+
+
+class BrandingAndPwaTests(TestCase):
+    def setUp(self):
+        User.objects.create_user("s3", password="pw12345!")
+        self.client.login(username="s3", password="pw12345!")
+
+    def test_manifest_is_valid_json_with_icons(self):
+        import json
+        r = self.client.get(reverse("site_manifest"))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("manifest+json", r["Content-Type"])
+        data = json.loads(r.content)
+        self.assertEqual(data["short_name"], "Hanamel")
+        self.assertEqual(data["display"], "standalone")
+        self.assertEqual(data["theme_color"], "#041E50")
+        sizes = {i["sizes"] for i in data["icons"]}
+        self.assertIn("192x192", sizes)
+        self.assertIn("512x512", sizes)
+        purposes = {i["purpose"] for i in data["icons"]}
+        self.assertIn("maskable", purposes)   # Android crops to a circle
+
+    def test_service_worker_served_from_root_scope(self):
+        r = self.client.get("/sw.js")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("javascript", r["Content-Type"])
+
+    def test_pages_carry_the_brand_mark_and_icons(self):
+        html = self.client.get(reverse("dashboard")).content.decode()
+        self.assertIn("logo-mark-80", html)
+        self.assertIn("apple-touch-icon", html)
+        self.assertIn('name="theme-color"', html)
+        self.assertIn("site.webmanifest", html)
+
+    def test_manifest_and_worker_do_not_require_login(self):
+        """The browser fetches these without the user's session."""
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("site_manifest")).status_code, 200)
+        self.assertEqual(self.client.get("/sw.js").status_code, 200)

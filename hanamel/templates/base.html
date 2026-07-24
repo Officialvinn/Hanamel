@@ -4,12 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Hanamel{% endblock %}</title>
+<link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
+<link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16.png' %}">
+<link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
+<link rel="manifest" href="{% url 'site_manifest' %}">
+<meta name="theme-color" content="#041E50">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hanamel">
+<meta name="application-name" content="Hanamel">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --paper:#F7FAF8; --card:#FFFFFF; --ink:#182028; --ink-soft:#5E6B75;
+  --brand:#041E50; --brand-red:#C10913;
   --rule:#E3EAE6; --mark:#0F9455; --mark-deep:#0A6E3F; --mark-soft:#E4F5EC;
   --oxide:#C2551C; --oxide-soft:#FDEEE3; --bar:#FFFFFF;
   --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -27,9 +38,11 @@ a:hover{text-decoration:underline}
 .topbar{background:var(--bar);border-bottom:1px solid var(--rule);padding:0 20px;
   display:flex;align-items:center;gap:28px;min-height:62px;
   position:sticky;top:0;z-index:30}
-.brand{font-family:var(--mono);font-weight:600;font-size:1.05rem;letter-spacing:.06em;
-  color:var(--ink);text-transform:uppercase;white-space:nowrap;flex:none}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:600;
+  font-size:1.05rem;letter-spacing:.06em;color:var(--brand);text-transform:uppercase;
+  white-space:nowrap;flex:none}
 .brand:hover{text-decoration:none}
+.brand-mark{height:30px;width:auto;display:block}
 .topbar nav{display:flex;gap:24px;flex:1;flex-wrap:nowrap;overflow-x:auto;
   scrollbar-width:none;-ms-overflow-style:none}
 .topbar nav::-webkit-scrollbar{display:none}
@@ -114,7 +127,8 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
 
 @media (max-width:640px){
   .topbar{flex-direction:column;align-items:stretch;gap:0;padding:0 14px;min-height:0}
-  .brand{padding:13px 0 9px}
+  .brand{padding:11px 0 8px;gap:9px}
+  .brand-mark{height:26px}
   .topbar nav{gap:20px;border-top:1px solid var(--rule);margin:0 -14px;padding:0 14px}
   .topbar nav a{padding:12px 0;font-size:.88rem}
   .wrap{padding:20px 14px 60px}
@@ -128,7 +142,10 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
 </head>
 <body>
 <header class="topbar">
-  <a href="{% url 'dashboard' %}" class="brand">Hanamel</a>
+  <a href="{% url 'dashboard' %}" class="brand">
+    <img src="{% static 'img/logo-mark-80.png' %}" alt="" class="brand-mark">
+    <span>Hanamel</span>
+  </a>
   {% if user.is_authenticated %}
   <nav>
     <a href="{% url 'dashboard' %}" class="{% if page == 'dash' %}on{% endif %}">Overview</a>
@@ -147,5 +164,12 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
   {% block content %}{% endblock %}
 </main>
 {% block js %}{% endblock %}
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('{% url "service_worker" %}').catch(function () {});
+  });
+}
+</script>
 </body>
 </html>
