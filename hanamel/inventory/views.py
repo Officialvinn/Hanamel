@@ -16,9 +16,11 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import (BusinessProfile, MpesaTransaction, Payment, Product, Sale,
-                     SaleItem, StockMovement)
+from .models import (BusinessProfile, CustomOrder, CustomOrderPayment,
+                     MpesaTransaction, Payment, Product, Sale, SaleItem,
+                     StockMovement)
 from .mpesa import normalise_ref, parse_confirmation
+from .templatetags.money import CURRENCY
 
 mpesa_log = logging.getLogger("mpesa")
 
@@ -569,3 +571,122 @@ def mpesa_reconcile(request):
     return render(request, "inventory/mpesa_reconcile.html", {
         "unmatched": unmatched, "recent": recent, "unpaid": unpaid,
         "page": "mpesa"})
+
+# --- custom orders ---------------------------------------------------------
+
+def _next_order_number():
+    year = timezone.now().year
+    prefix = f"CO-{year}-"
+    last = (CustomOrder.objects.filter(number__startswith=prefix)
+            .order_by("-number").values_list("number", flat=True).first())
+    seq = int(last.split("-")[-1]) + 1 if last else 1
+    return f"{prefix}{seq:04d}"
+
+
+@login_required
+def order_list(request):
+    show = request.GET.get("show", "open")
+    orders = CustomOrder.objects.all()
+    if show == "open":
+        orders = orders.filter(status__in=CustomOrder.OPEN_STATUSES)
+    elif show != "all":
+        orders = orders.filter(status=show)
+    open_count = CustomOrder.objects.filter(
+        status__in=CustomOrder.OPEN_STATUSES).count()
+    return render(request, "inventory/order_list.html", {
+        "orders": orders, "show": show, "open_count": open_count,
+        "statuses": CustomOrder.STATUS_CHOICES, "page": "orders"})
+
+
+@login_required
+def order_create(request):
+    if request.method == "POST":
+        name = request.POST.get("customer_name", "").strip()
+        desc = request.POST.get("description", "").strip()
+        raw_price = request.POST.get("quoted_price", "").strip()
+        errors = []
+        if not name:
+            errors.append("A customer name is needed.")
+        if not desc:
+            errors.append("Describe what's being made.")
+        try:
+            price = Decimal(raw_price)
+            if price <= 0:
+                errors.append("The quoted price must be more than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("The quoted price isn't a valid number.")
+            price = None
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+            return render(request, "inventory/order_form.html", {
+                "methods": Payment.METHOD_CHOICES, "page": "orders",
+                "form": request.POST})
+
+        order = CustomOrder.objects.create(
+            number=_next_order_number(), customer_name=name,
+            customer_phone=request.POST.get("customer_phone", "").strip(),
+            description=desc, quoted_price=price,
+            target_date=request.POST.get("target_date") or None,
+            photo=request.FILES.get("photo"))
+
+        raw_dep = request.POST.get("deposit", "").strip()
+        if raw_dep:
+            try:
+                dep = Decimal(raw_dep)
+                if dep > 0:
+                    CustomOrderPayment.objects.create(
+                        order=order, method=request.POST.get("deposit_method", Payment.CASH),
+                        amount=min(dep, price), is_deposit=True,
+                        mpesa_receipt=request.POST.get("deposit_mpesa", "").strip())
+            except (InvalidOperation, ValueError):
+                pass
+
+        messages.success(request, f"Created {order.number}.")
+        return redirect("order_detail", pk=order.pk)
+
+    return render(request, "inventory/order_form.html",
+                  {"methods": Payment.METHOD_CHOICES, "page": "orders"})
+
+
+@login_required
+def order_detail(request, pk):
+    order = get_object_or_404(CustomOrder.objects.prefetch_related("payments"), pk=pk)
+    return render(request, "inventory/order_detail.html", {
+        "order": order, "methods": Payment.METHOD_CHOICES,
+        "statuses": CustomOrder.STATUS_CHOICES, "page": "orders"})
+
+
+@login_required
+@require_POST
+def order_status(request, pk):
+    order = get_object_or_404(CustomOrder, pk=pk)
+    new_status = request.POST.get("status")
+    if new_status in dict(CustomOrder.STATUS_CHOICES):
+        order.status = new_status
+        order.save(update_fields=["status", "updated_at"])
+        messages.success(request, f"{order.number} is now {order.get_status_display()}.")
+    return redirect("order_detail", pk=pk)
+
+
+@login_required
+@require_POST
+def order_payment(request, pk):
+    order = get_object_or_404(CustomOrder, pk=pk)
+    try:
+        amount = Decimal(request.POST.get("amount", "").strip())
+    except (InvalidOperation, ValueError):
+        messages.error(request, "That payment amount isn't a number.")
+        return redirect("order_detail", pk=pk)
+    if amount <= 0:
+        messages.error(request, "The payment must be more than zero.")
+        return redirect("order_detail", pk=pk)
+
+    CustomOrderPayment.objects.create(
+        order=order, method=request.POST.get("method", Payment.CASH),
+        amount=min(amount, order.balance if order.balance > 0 else amount),
+        mpesa_receipt=request.POST.get("mpesa_receipt", "").strip(),
+        is_deposit=order.amount_paid == 0)
+    messages.success(request, f"Recorded {CURRENCY} {amount:,.2f} on {order.number}.")
+    return redirect("order_detail", pk=pk)

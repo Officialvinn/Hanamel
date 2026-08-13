@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}Custom orders — Hanamel{% endblock %}
+{% block css %}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.filters a{font-family:var(--mono);font-size:.78rem;padding:6px 12px;border-radius:2px;
+  border:1px solid var(--rule);color:var(--ink-soft)}
+.filters a.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.filters a:hover{text-decoration:none;border-color:var(--ink-soft)}
+.stat-pill{display:inline-block;font-family:var(--mono);font-size:.64rem;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:2px}
+.st-quoted{background:#EEF2F7;color:#3B5573}
+.st-in_progress{background:#FFF3E0;color:#B26A00}
+.st-ready{background:var(--mark-soft);color:var(--mark-deep)}
+.st-collected{background:#EAEAEA;color:#666}
+.st-cancelled{background:var(--oxide-soft);color:var(--oxide)}
+{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Custom orders</h1>
+    <p class="sub">{{ open_count }} open order{{ open_count|pluralize }}.</p>
+  </div>
+  <a href="{% url 'order_create' %}" class="btn">New order</a>
+</div>
+
+<div class="filters">
+  <a href="?show=open" class="{% if show == 'open' %}on{% endif %}">Open</a>
+  <a href="?show=ready" class="{% if show == 'ready' %}on{% endif %}">Ready</a>
+  <a href="?show=collected" class="{% if show == 'collected' %}on{% endif %}">Collected</a>
+  <a href="?show=all" class="{% if show == 'all' %}on{% endif %}">All</a>
+</div>
+
+<div class="panel">
+{% if orders %}
+<div class="table-wrap">
+<table>
+  <tr><th>Order</th><th>Customer</th><th class="hide-sm">Wanted</th>
+      <th>Status</th><th class="r">Price</th><th class="r hide-sm">Balance</th></tr>
+  {% for o in orders %}
+  <tr>
+    <td class="num"><a href="{% url 'order_detail' o.pk %}">{{ o.number }}</a></td>
+    <td>{{ o.customer_name }}</td>
+    <td class="meta hide-sm">{% if o.target_date %}{{ o.target_date|date:"j M" }}{% else %}—{% endif %}</td>
+    <td><span class="stat-pill st-{{ o.status }}">{{ o.get_status_display }}</span></td>
+    <td class="r num">{{ o.quoted_price|amount }}</td>
+    <td class="r num hide-sm">
+      {% if o.balance > 0 %}<span style="color:var(--oxide)">{{ o.balance|amount }}</span>
+      {% else %}<span style="color:var(--mark)">Paid</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<div class="empty"><p>No orders here.</p>
+<a href="{% url 'order_create' %}" class="btn">Create one</a></div>
+{% endif %}
+</div>
+{% endblock %}

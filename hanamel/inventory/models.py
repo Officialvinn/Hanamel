@@ -273,3 +273,78 @@ class MpesaTransaction(models.Model):
 
     def __str__(self):
         return f"{self.trans_id} · {self.amount} · {self.bill_ref or 'no account'}"
+
+class CustomOrder(models.Model):
+    """A made-to-order job: a door, a table, custom-cut timber. Quoted, built
+    over time, then collected. Priced by agreement, not from the catalog."""
+    QUOTED = "quoted"
+    IN_PROGRESS = "in_progress"
+    READY = "ready"
+    COLLECTED = "collected"
+    CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (QUOTED, "Quoted"),
+        (IN_PROGRESS, "In progress"),
+        (READY, "Ready for collection"),
+        (COLLECTED, "Collected"),
+        (CANCELLED, "Cancelled"),
+    ]
+    OPEN_STATUSES = [QUOTED, IN_PROGRESS, READY]
+
+    number = models.CharField(max_length=24, unique=True, blank=True)
+    customer_name = models.CharField(max_length=140)
+    customer_phone = models.CharField(max_length=40, blank=True)
+    description = models.TextField(help_text="What the customer wants built")
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=QUOTED)
+
+    quoted_price = models.DecimalField(max_digits=12, decimal_places=2,
+                                       help_text="Agreed total price")
+    target_date = models.DateField(null=True, blank=True,
+                                   help_text="When it should be ready")
+    photo = models.ImageField(upload_to="custom_orders/", null=True, blank=True,
+                              help_text="A reference photo or sketch")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def amount_paid(self):
+        return sum((p.amount for p in self.payments.all()), Decimal("0.00"))
+
+    @property
+    def balance(self):
+        return self.quoted_price - self.amount_paid
+
+    @property
+    def is_paid(self):
+        return self.balance <= 0
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES
+
+    def __str__(self):
+        return f"{self.number} — {self.customer_name}"
+
+
+class CustomOrderPayment(models.Model):
+    """A deposit or settlement against a custom order. Kept separate from Sale
+    payments so a half-built order never looks like a completed sale."""
+    order = models.ForeignKey(CustomOrder, related_name="payments",
+                              on_delete=models.CASCADE)
+    method = models.CharField(max_length=10, choices=Payment.METHOD_CHOICES,
+                              default=Payment.CASH)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    mpesa_receipt = models.CharField(max_length=32, blank=True)
+    is_deposit = models.BooleanField(default=False)
+    received_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=140, blank=True)
+
+    class Meta:
+        ordering = ["received_at"]
+
+    def __str__(self):
+        return f"{self.get_method_display()} {self.amount} on {self.order.number}"

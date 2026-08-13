@@ -1,7 +1,7 @@
 from django.contrib import admin
 
-from .models import (BusinessProfile, Payment, Product, Sale, SaleItem,
-                     StockMovement)
+from .models import (BusinessProfile, CustomOrder, CustomOrderPayment, Payment,
+                     Product, Sale, SaleItem, StockMovement)
 
 
 @admin.register(Product)
@@ -51,3 +51,16 @@ class StockMovementAdmin(admin.ModelAdmin):
     list_filter = ("reason", "created_at")
     search_fields = ("product__name", "product__species", "note")
     readonly_fields = ("created_at",)
+
+class CustomOrderPaymentInline(admin.TabularInline):
+    model = CustomOrderPayment
+    extra = 0
+
+
+@admin.register(CustomOrder)
+class CustomOrderAdmin(admin.ModelAdmin):
+    list_display = ("number", "customer_name", "status", "quoted_price",
+                    "amount_paid", "balance", "target_date")
+    list_filter = ("status",)
+    search_fields = ("number", "customer_name", "description")
+    inlines = [CustomOrderPaymentInline]

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}{{ order.number }} — Hanamel{% endblock %}
+{% block css %}
+.grid{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start}
+.stat-pill{display:inline-block;font-family:var(--mono);font-size:.66rem;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:2px}
+.st-quoted{background:#EEF2F7;color:#3B5573}
+.st-in_progress{background:#FFF3E0;color:#B26A00}
+.st-ready{background:var(--mark-soft);color:var(--mark-deep)}
+.st-collected{background:#EAEAEA;color:#666}
+.st-cancelled{background:var(--oxide-soft);color:var(--oxide)}
+.desc{white-space:pre-wrap;line-height:1.6}
+.photo img{width:100%;border-radius:var(--r);border:1px solid var(--rule);margin-top:6px}
+.side .box{border:1px solid var(--rule);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.side .lead{font-family:var(--mono);font-size:.66rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}
+.money-row{display:flex;justify-content:space-between;padding:5px 0;font-size:.92rem}
+.money-row.big{border-top:2px solid var(--ink);margin-top:6px;padding-top:10px;
+  font-family:var(--mono);font-weight:600;font-size:1.05rem}
+.paylist{font-size:.84rem;color:var(--ink-soft);margin:8px 0 0;padding:0;list-style:none}
+.paylist li{padding:3px 0}
+select,.side input{width:100%;padding:9px 10px;font-size:.92rem}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1 class="num">{{ order.number }}</h1>
+    <p class="sub">{{ order.customer_name }}{% if order.customer_phone %} · {{ order.customer_phone }}{% endif %}
+      · created {{ order.created_at|date:"j M Y" }}</p>
+  </div>
+  <a href="{% url 'order_list' %}" class="btn btn-ghost">All orders</a>
+</div>
+
+<div class="grid">
+  <div>
+    <div class="panel" style="padding:20px">
+      <div style="margin-bottom:14px">
+        <span class="stat-pill st-{{ order.status }}">{{ order.get_status_display }}</span>
+        {% if order.target_date %}
+        <span class="meta" style="margin-left:10px">Ready by {{ order.target_date|date:"j M Y" }}</span>
+        {% endif %}
+      </div>
+      <div class="desc">{{ order.description }}</div>
+      {% if order.photo %}
+      <div class="photo"><img src="{{ order.photo.url }}" alt="Reference for {{ order.number }}"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="box">
+      <div class="lead">Money</div>
+      <div class="money-row"><span>Quoted</span><span class="num">{{ order.quoted_price|amount }}</span></div>
+      <div class="money-row"><span>Paid</span><span class="num">{{ order.amount_paid|amount }}</span></div>
+      <div class="money-row big">
+        <span>{% if order.balance > 0 %}Owing{% else %}Settled{% endif %}</span>
+        <span class="num" style="{% if order.balance > 0 %}color:var(--oxide){% else %}color:var(--mark){% endif %}">
+          {{ order.balance|amount }}</span>
+      </div>
+      {% if order.payments.all %}
+      <ul class="paylist">
+        {% for p in order.payments.all %}
+        <li>{{ p.received_at|date:"j M" }} · {{ p.get_method_display }}
+          {% if p.is_deposit %}(deposit){% endif %} — {{ p.amount|amount }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+
+    {% if order.balance > 0 and order.status != 'cancelled' %}
+    <div class="box">
+      <div class="lead">Record a payment</div>
+      <form method="post" action="{% url 'order_payment' order.pk %}">
+        {% csrf_token %}
+        <div class="field" style="margin-bottom:10px">
+          <input type="number" name="amount" step="0.01" min="0"
+                 placeholder="Amount" required>
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <select name="method" id="paymethod">
+            {% for val, lab in methods %}<option value="{{ val }}">{{ lab }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field" id="mref" style="display:none;margin-bottom:10px">
+          <input type="text" name="mpesa_receipt" placeholder="M-Pesa code"
+                 style="text-transform:uppercase">
+        </div>
+        <button type="submit" class="btn" style="width:100%">Add payment</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="box">
+      <div class="lead">Update status</div>
+      <form method="post" action="{% url 'order_status' order.pk %}">
+        {% csrf_token %}
+        <select name="status" style="margin-bottom:10px">
+          {% for val, lab in statuses %}
+          <option value="{{ val }}" {% if val == order.status %}selected{% endif %}>{{ lab }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-ghost" style="width:100%">Save status</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+(function(){
+  var m = document.getElementById('paymethod'), r = document.getElementById('mref');
+  if (!m) return;
+  function sync(){ r.style.display = m.value === 'mpesa' ? '' : 'none'; }
+  m.addEventListener('change', sync); sync();
+})();
+</script>
+{% endblock %}

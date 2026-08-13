@@ -621,3 +621,96 @@ class FeatureFlagTests(TestCase):
         import os
         os.environ.pop("MPESA_CONSUMER_KEY", None)
         self.assertEqual(self.client.get(reverse("mpesa_reconcile")).status_code, 200)
+
+class CustomOrderTests(TestCase):
+    def setUp(self):
+        from .models import CustomOrder, CustomOrderPayment
+        self.CO = CustomOrder
+        self.COP = CustomOrderPayment
+        self.user = User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+
+    def _create(self, **over):
+        data = {"customer_name": "Jane Wanjiru",
+                "description": "Mahogany panel door 3x7ft",
+                "quoted_price": "25000"}
+        data.update(over)
+        return self.client.post(reverse("order_create"), data, follow=True)
+
+    def test_create_order_assigns_number(self):
+        self._create()
+        order = self.CO.objects.get()
+        self.assertEqual(order.number, f"CO-{order.created_at.year}-0001")
+        self.assertEqual(order.status, "quoted")
+        self.assertEqual(order.quoted_price, Decimal("25000"))
+        self.assertEqual(order.balance, Decimal("25000"))
+
+    def test_deposit_at_creation_is_recorded(self):
+        self._create(deposit="10000", deposit_method="mpesa",
+                     deposit_mpesa="SFG4H2K9LM")
+        order = self.CO.objects.get()
+        self.assertEqual(order.amount_paid, Decimal("10000"))
+        self.assertEqual(order.balance, Decimal("15000"))
+        p = order.payments.get()
+        self.assertTrue(p.is_deposit)
+        self.assertEqual(p.mpesa_receipt, "SFG4H2K9LM")
+
+    def test_missing_fields_are_rejected(self):
+        self.client.post(reverse("order_create"),
+                         {"customer_name": "", "description": "", "quoted_price": "x"})
+        self.assertEqual(self.CO.objects.count(), 0)
+
+    def test_adding_a_payment_reduces_balance(self):
+        self._create()
+        order = self.CO.objects.get()
+        self.client.post(reverse("order_payment", args=[order.pk]),
+                         {"amount": "5000", "method": "cash"})
+        order.refresh_from_db()
+        self.assertEqual(order.amount_paid, Decimal("5000"))
+        self.assertEqual(order.balance, Decimal("20000"))
+
+    def test_payment_cannot_exceed_balance(self):
+        self._create()
+        order = self.CO.objects.get()
+        self.client.post(reverse("order_payment", args=[order.pk]),
+                         {"amount": "999999", "method": "cash"})
+        order.refresh_from_db()
+        self.assertEqual(order.amount_paid, Decimal("25000"))
+        self.assertTrue(order.is_paid)
+
+    def test_status_transitions(self):
+        self._create()
+        order = self.CO.objects.get()
+        for status in ["in_progress", "ready", "collected"]:
+            self.client.post(reverse("order_status", args=[order.pk]),
+                             {"status": status})
+            order.refresh_from_db()
+            self.assertEqual(order.status, status)
+
+    def test_invalid_status_is_ignored(self):
+        self._create()
+        order = self.CO.objects.get()
+        self.client.post(reverse("order_status", args=[order.pk]),
+                         {"status": "nonsense"})
+        order.refresh_from_db()
+        self.assertEqual(order.status, "quoted")
+
+    def test_open_filter_excludes_collected(self):
+        self._create()
+        o = self.CO.objects.get()
+        self._create(customer_name="Second", description="Table", quoted_price="8000")
+        o.status = "collected"; o.save()
+        r = self.client.get(reverse("order_list") + "?show=open")
+        self.assertNotContains(r, o.number)
+        self.assertContains(r, "Second")
+
+    def test_pages_load(self):
+        self._create()
+        order = self.CO.objects.get()
+        for url in [reverse("order_list"), reverse("order_create"),
+                    reverse("order_detail", args=[order.pk])]:
+            self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_orders_require_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("order_list")).status_code, 302)

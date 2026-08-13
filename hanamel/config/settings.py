@@ -155,3 +155,7 @@ if not DEBUG:
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = "/accounts/login/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+# Uploaded files (product photos, custom-order references). Kept OUTSIDE the
+# repo so a git pull never touches them, and served by nginx in production.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.environ.get("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media"))

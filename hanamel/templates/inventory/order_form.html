@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}New custom order — Hanamel{% endblock %}
+{% block css %}
+.formwrap{max-width:560px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+textarea{font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px solid var(--rule);
+  border-radius:var(--r);width:100%;min-height:90px;resize:vertical}
+.deposit-box{border:1px solid var(--rule);border-radius:var(--r);padding:16px;
+  margin-top:6px;background:#FBFDFC}
+.deposit-box .lead{font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:12px}
+@media (max-width:560px){.row2{grid-template-columns:1fr}}
+{% endblock %}
+
+{% block content %}
+<h1>New custom order</h1>
+<p class="sub">For made-to-order work — doors, frames, tables, custom cuts.</p>
+
+<form method="post" enctype="multipart/form-data" class="formwrap">
+  {% csrf_token %}
+  <div class="row2">
+    <div class="field">
+      <label for="cn">Customer name</label>
+      <input type="text" id="cn" name="customer_name" value="{{ form.customer_name|default:'' }}" required>
+    </div>
+    <div class="field">
+      <label for="cp">Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input type="text" id="cp" name="customer_phone" value="{{ form.customer_phone|default:'' }}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="desc">What are they ordering?</label>
+    <textarea id="desc" name="description" placeholder="e.g. Mahogany panel door, 3ft x 7ft, with frame" required>{{ form.description|default:'' }}</textarea>
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label for="qp">Quoted price (KSh)</label>
+      <input type="number" id="qp" name="quoted_price" step="0.01" min="0"
+             value="{{ form.quoted_price|default:'' }}" required>
+    </div>
+    <div class="field">
+      <label for="td">Ready by <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input type="date" id="td" name="target_date" value="{{ form.target_date|default:'' }}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="ph">Reference photo <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+    <input type="file" id="ph" name="photo" accept="image/*">
+  </div>
+
+  <div class="deposit-box">
+    <div class="lead">Deposit taken now (optional)</div>
+    <div class="row2">
+      <div class="field" style="margin:0">
+        <label for="dep">Amount</label>
+        <input type="number" id="dep" name="deposit" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="field" style="margin:0">
+        <label for="dm">Paid by</label>
+        <select id="dm" name="deposit_method">
+          {% for val, lab in methods %}<option value="{{ val }}">{{ lab }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="field" id="depmpesa" style="display:none;margin:12px 0 0">
+      <label for="dmr">M-Pesa code</label>
+      <input type="text" id="dmr" name="deposit_mpesa" placeholder="e.g. SFG4H2K9LM"
+             style="text-transform:uppercase">
+    </div>
+  </div>
+
+  <div style="margin-top:22px;display:flex;gap:10px">
+    <a href="{% url 'order_list' %}" class="btn btn-ghost">Cancel</a>
+    <button type="submit" class="btn">Create order</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block js %}
+<script>
+(function(){
+  var m = document.getElementById('dm'), box = document.getElementById('depmpesa');
+  function sync(){ box.style.display = m.value === 'mpesa' ? '' : 'none'; }
+  m.addEventListener('change', sync); sync();
+})();
+</script>
+{% endblock %}
