@@ -8,6 +8,7 @@
     <form method="get" style="max-width:200px">
       <input type="text" name="q" value="{{ q }}" placeholder="Search species…" aria-label="Search stock">
     </form>
+    <a href="{% url 'recut_losses' %}" class="btn btn-ghost">Recut losses</a>
     <a href="{% url 'stock_update' %}" class="btn">Update stock</a>
   </div>
 </div>
@@ -25,7 +26,7 @@
       <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
     {% endif %}</span></td>
     <td>
-      <div class="size">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</div>
+      <div class="size">{{ p.width_display }}×{{ p.thickness_display }}×{{ p.length_display }}</div>
       <div class="meta">{{ p.species }}</div>
     </td>
     <td class="r num hide-sm">{{ p.board_feet }}</td>
@@ -64,6 +65,31 @@
       {% if p.stock_qty <= p.low_stock_threshold %}
         <span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span>
       {% else %}{{ p.stock_qty|floatformat:0 }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</div>
+{% endif %}
+
+{% if doors %}
+<h2>Doors</h2>
+<div class="panel">
+<div class="table-wrap">
+<table>
+  <tr><th>Door</th><th>Size</th><th class="r">Price (KSh)</th><th class="r">Stock</th></tr>
+  {% for p in doors %}
+  <tr>
+    <td>{{ p.name }}<div class="meta">{{ p.species|default:"—" }}</div></td>
+    <td><div class="size">{{ p.door_size }}</div></td>
+    <td class="r num">{{ p.price|amount }}</td>
+    <td class="r num">
+      <a href="{% url 'stock_history' p.pk %}" style="color:inherit">
+      {% if p.stock_qty <= p.low_stock_threshold %}
+        <span class="pill pill-low">{{ p.stock_qty|floatformat:0 }}</span>
+      {% else %}{{ p.stock_qty|floatformat:0 }}{% endif %}
+      </a>
     </td>
   </tr>
   {% endfor %}

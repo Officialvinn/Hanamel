@@ -38,20 +38,22 @@
 .line:last-child{border-bottom:none}
 .line .nm{font-family:var(--mono);font-size:.84rem;font-weight:500;line-height:1.3}
 .line .ea{font-size:.7rem;color:var(--ink-soft);font-family:var(--mono)}
-.line input{padding:7px 8px;font-size:.9rem;text-align:right}
+.line input{padding:7px 8px;font-size:1rem;text-align:right}
 .line .x{background:none;border:none;color:var(--ink-soft);cursor:pointer;
-  font-size:1.2rem;padding:0 4px;line-height:1}
-.line .x:hover{color:var(--oxide)}
+  font-size:1.2rem;line-height:1;width:36px;height:36px;flex:none;
+  display:flex;align-items:center;justify-content:center;border-radius:var(--r)}
+.line .x:hover{color:var(--oxide);background:var(--oxide-soft)}
 .tot{border-top:2px solid var(--ink);padding:15px 14px;display:flex;
   justify-content:space-between;align-items:baseline}
 .tot .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
   text-transform:uppercase;color:var(--ink-soft)}
 .tot .v{font-family:var(--mono);font-size:1.5rem;font-weight:600;
   font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.cart-foot{padding:0 14px 15px}
+.cart-foot{padding:0 14px calc(15px + env(safe-area-inset-bottom))}
 .payrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .payrow label,#mpesaref label{margin-bottom:4px}
-.payrow select,.payrow input{padding:9px 10px;font-size:.92rem}
+.payrow select,.payrow input{padding:9px 10px;font-size:1rem}
+.cutgrid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:end}
 h2.species{display:flex;align-items:center;gap:10px;color:var(--mark-deep)}
 h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
 .cart-empty{padding:34px 16px;text-align:center;color:var(--ink-soft);font-size:.86rem}
@@ -63,13 +65,19 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
   .settle{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);
     border-top:1px solid var(--rule);box-shadow:0 -6px 20px rgba(0,0,0,.09)}
   .cart-body{max-height:none}
-  #saleform{padding-bottom:132px}
+  #saleform{padding-bottom:calc(132px + env(safe-area-inset-bottom))}
+  .cutgrid{grid-template-columns:1fr 1fr}
 }
 {% endblock %}
 
 {% block content %}
 <h1>Record a sale</h1>
 <p class="sub">Tap items to add them, set quantities, then confirm.</p>
+
+<div class="stats" style="margin-bottom:18px">
+  <div class="stat"><div class="k">Pieces ready to sell</div>
+    <div class="v">{{ total_pieces|floatformat:0 }}</div></div>
+</div>
 
 <form method="post" id="saleform">
   {% csrf_token %}
@@ -91,7 +99,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
           <span class="cs">{% if p.cross_section_px %}
             <i style="width:{{ p.cross_section_px.w }}px;height:{{ p.cross_section_px.h }}px"></i>
           {% endif %}</span>
-          <span class="lab">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</span>
+          <span class="lab">{{ p.width_display }}×{{ p.thickness_display }}×{{ p.length_display }}</span>
           <span class="pr">{{ p.unit_price|money:0 }}</span>
           <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
         </button>
@@ -103,6 +111,102 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
       </div>
       {% endfor %}
 
+      {% if timber_groups %}
+      <h2 class="species">Custom cut</h2>
+      <div class="picker">
+        <button type="button" class="chip" id="customtile"
+                style="border-style:dashed;justify-content:center;gap:6px">
+          <span class="lab" style="color:var(--mark-deep)">+ Custom size</span>
+          <span class="st">Type any dimensions</span>
+        </button>
+      </div>
+
+      <div id="cutpanel" class="panel" style="display:none;padding:16px;margin-top:10px;
+           border:2px solid var(--mark)">
+        <div class="cutgrid">
+          <label style="grid-column:1/-1;font-family:var(--mono);font-size:.72rem;
+                 letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)">
+            Species
+            <select id="cutspecies" style="width:100%;margin-top:4px;padding:8px">
+              {% for g in timber_groups %}
+              <option value="{{ g.species }}" data-rate="{{ g.items.0.rate_per_board_foot }}">{{ g.species }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Width in<input type="number" id="cutw" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Thick in<input type="number" id="cutt" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Length ft<input type="number" id="cutl" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Qty<input type="number" id="cutq" min="1" step="1" value="1" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;
+             margin-top:12px;padding:10px 12px;background:var(--mark-soft);border-radius:var(--r)">
+          <span id="cutcalc" style="font-family:var(--mono);font-size:.82rem;color:var(--mark-deep)">Enter dimensions</span>
+          <span id="cutprice" style="font-family:var(--mono);font-size:1.05rem;font-weight:600;color:var(--mark-deep)"></span>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button type="button" class="btn" id="cutadd" style="flex:1">Add to sale</button>
+          <button type="button" class="btn btn-ghost" id="cutcancel">Cancel</button>
+        </div>
+      </div>
+
+      <h2 class="species">Recut (cracked piece)</h2>
+      <div class="picker">
+        <button type="button" class="chip" id="recuttile"
+                style="border-style:dashed;justify-content:center;gap:6px">
+          <span class="lab" style="color:var(--mark-deep)">+ Recut a piece</span>
+          <span class="st">Sell a bigger piece as a smaller size</span>
+        </button>
+      </div>
+
+      <div id="recutpanel" class="panel" style="display:none;padding:16px;margin-top:10px;
+           border:2px solid var(--mark)">
+        <p class="sub" style="margin:0 0 12px">
+          Pick the piece it's actually coming from (stock comes off that size),
+          then the smaller dimensions it's being sold as.</p>
+        <label style="display:block;font-family:var(--mono);font-size:.72rem;
+               letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:12px">
+          Cracked piece (source)
+          <select id="recutsource" style="width:100%;margin-top:4px;padding:8px">
+            <option value="">Select a size…</option>
+            {% for g in timber_groups %}
+            {% for p in g.items %}
+            {% if p.stock_qty > 0 %}
+            <option value="{{ p.pk }}" data-rate="{{ p.rate_per_board_foot }}"
+                    data-species="{{ p.species }}" data-stock="{{ p.stock_qty|floatformat:0 }}">
+              {{ p.species }} {{ p.width_display }}×{{ p.thickness_display }}×{{ p.length_display }}
+              ({{ p.stock_qty|floatformat:0 }} in stock)
+            </option>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+          </select>
+        </label>
+        <div class="cutgrid">
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Sell as width in<input type="number" id="recutw" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Thick in<input type="number" id="recutt" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Length ft<input type="number" id="recutl" min="0" step="0.5" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+          <label style="font-family:var(--mono);font-size:.68rem;text-transform:uppercase;color:var(--ink-soft)">
+            Qty<input type="number" id="recutq" min="1" step="1" value="1" style="width:100%;margin-top:4px;padding:8px;text-align:right"></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;
+             margin-top:12px;padding:10px 12px;background:var(--mark-soft);border-radius:var(--r)">
+          <span id="recutcalc" style="font-family:var(--mono);font-size:.82rem;color:var(--mark-deep)">Pick a source piece and dimensions</span>
+          <span id="recutprice" style="font-family:var(--mono);font-size:1.05rem;font-weight:600;color:var(--mark-deep)"></span>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button type="button" class="btn" id="recutadd" style="flex:1">Add to sale</button>
+          <button type="button" class="btn btn-ghost" id="recutcancel">Cancel</button>
+        </div>
+      </div>
+      {% endif %}
+
       {% if finished %}
       <h2 class="species">Finished products</h2>
       <div class="picker">
@@ -111,6 +215,21 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
                 {% if p.stock_qty <= 0 %}disabled{% endif %}>
           <span class="badge" aria-hidden="true"></span>
           <span class="lab">{{ p.name }}</span>
+          <span class="pr">{{ p.price|money:0 }}</span>
+          <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if doors %}
+      <h2 class="species">Doors</h2>
+      <div class="picker">
+        {% for p in doors %}
+        <button type="button" class="chip" data-id="{{ p.pk }}"
+                {% if p.stock_qty <= 0 %}disabled{% endif %}>
+          <span class="badge" aria-hidden="true"></span>
+          <span class="lab">{% if p.species %}{{ p.species }} {% endif %}{{ p.name }} · {{ p.door_height }}×{{ p.door_width }}</span>
           <span class="pr">{{ p.price|money:0 }}</span>
           <span class="st {% if p.stock_qty <= p.low_stock_threshold %}low{% endif %}">{{ p.stock_qty|floatformat:0 }} in stock</span>
         </button>
@@ -245,7 +364,7 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
   methodEl.addEventListener('change', syncMethod);
   syncMethod();
 
-  document.querySelectorAll('.chip').forEach(function(btn){
+  document.querySelectorAll('.chip[data-id]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var id = parseInt(btn.dataset.id, 10);
       var found = cart.find(function(c){ return c.id === id; });
@@ -253,6 +372,165 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
       render();
     });
   });
+
+  // ---- custom cuts (one-off sizes, board-foot priced) ----
+  var customCuts = [];   // [{species, w, t, l, qty, rate, bf, amount}]
+  var tile = document.getElementById('customtile');
+  var panel = document.getElementById('cutpanel');
+  var spSel = document.getElementById('cutspecies');
+  var cw = document.getElementById('cutw'), ct = document.getElementById('cutt');
+  var cl = document.getElementById('cutl'), cq = document.getElementById('cutq');
+  var calcEl = document.getElementById('cutcalc'), priceEl = document.getElementById('cutprice');
+  var addBtn = document.getElementById('cutadd'), cancelBtn = document.getElementById('cutcancel');
+
+  function currentRate(){
+    var opt = spSel.options[spSel.selectedIndex];
+    return opt ? parseFloat(opt.dataset.rate) : NaN;
+  }
+  function preview(){
+    var w = parseFloat(cw.value), t = parseFloat(ct.value),
+        l = parseFloat(cl.value), q = parseFloat(cq.value), rate = currentRate();
+    if ([w,t,l].some(function(x){return isNaN(x)||x<=0;})){
+      calcEl.textContent = 'Enter dimensions'; priceEl.textContent = ''; return null;
+    }
+    var bf = Math.floor((w*t*l)/12), each = bf*rate, qty = (isNaN(q)||q<1)?1:q;
+    calcEl.textContent = w+'×'+t+'×'+l+' ÷ 12 = '+bf+' bd ft (whole only) × '+qty;
+    priceEl.textContent = money(each*qty);
+    return {species:spSel.value, w:w, t:t, l:l, qty:qty, rate:rate, bf:bf, amount:each*qty};
+  }
+  [cw,ct,cl,cq,spSel].forEach(function(el){ el.addEventListener('input', preview); });
+  tile.addEventListener('click', function(){
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    if (panel.style.display !== 'none') cw.focus();
+  });
+  cancelBtn.addEventListener('click', function(){ panel.style.display='none'; });
+  addBtn.addEventListener('click', function(){
+    var c = preview();
+    if (!c){ cw.focus(); return; }
+    customCuts.push(c);
+    cw.value=ct.value=cl.value=''; cq.value='1';
+    calcEl.textContent='Enter dimensions'; priceEl.textContent='';
+    panel.style.display='none';
+    render();
+  });
+
+  // ---- recuts (cracked pieces sold at a smaller size than stocked) ----
+  var recuts = [];   // [{sourceId, sourceLabel, species, w, t, l, qty, rate, bf, amount}]
+  var rTile = document.getElementById('recuttile');
+  var rPanel = document.getElementById('recutpanel');
+  var rSourceSel = document.getElementById('recutsource');
+  var rw = document.getElementById('recutw'), rt = document.getElementById('recutt');
+  var rl = document.getElementById('recutl'), rq = document.getElementById('recutq');
+  var rCalcEl = document.getElementById('recutcalc'), rPriceEl = document.getElementById('recutprice');
+  var rAddBtn = document.getElementById('recutadd'), rCancelBtn = document.getElementById('recutcancel');
+
+  function recutSource(){
+    var opt = rSourceSel.options[rSourceSel.selectedIndex];
+    if (!opt || !opt.value) return null;
+    return {
+      id: opt.value, label: opt.textContent.trim(),
+      species: opt.dataset.species, rate: parseFloat(opt.dataset.rate),
+      stock: parseFloat(opt.dataset.stock)
+    };
+  }
+  function recutPreview(){
+    var src = recutSource();
+    var w = parseFloat(rw.value), t = parseFloat(rt.value),
+        l = parseFloat(rl.value), q = parseFloat(rq.value);
+    if (!src){
+      rCalcEl.textContent = 'Pick a source piece and dimensions'; rPriceEl.textContent = ''; return null;
+    }
+    if ([w,t,l].some(function(x){return isNaN(x)||x<=0;})){
+      rCalcEl.textContent = 'Enter the dimensions it\'s being sold as'; rPriceEl.textContent = ''; return null;
+    }
+    var qty = (isNaN(q)||q<1) ? 1 : q;
+    if (qty > src.stock){
+      rCalcEl.textContent = 'Only ' + src.stock + ' of that piece in stock'; rPriceEl.textContent = ''; return null;
+    }
+    var bf = Math.floor((w*t*l)/12), each = bf*src.rate;
+    rCalcEl.textContent = w+'×'+t+'×'+l+' ÷ 12 = '+bf+' bd ft (whole only) × '+qty+' (from '+src.label+')';
+    rPriceEl.textContent = money(each*qty);
+    return {sourceId:src.id, sourceLabel:src.label, species:src.species,
+            w:w, t:t, l:l, qty:qty, rate:src.rate, bf:bf, amount:each*qty};
+  }
+  [rw,rt,rl,rq,rSourceSel].forEach(function(el){ el.addEventListener('input', recutPreview); });
+  rTile.addEventListener('click', function(){
+    rPanel.style.display = rPanel.style.display === 'none' ? '' : 'none';
+    if (rPanel.style.display !== 'none') rSourceSel.focus();
+  });
+  rCancelBtn.addEventListener('click', function(){ rPanel.style.display='none'; });
+  rAddBtn.addEventListener('click', function(){
+    var c = recutPreview();
+    if (!c){ rSourceSel.focus(); return; }
+    recuts.push(c);
+    rw.value=rt.value=rl.value=''; rq.value='1'; rSourceSel.selectedIndex=0;
+    rCalcEl.textContent='Pick a source piece and dimensions'; rPriceEl.textContent='';
+    rPanel.style.display='none';
+    render();
+  });
+
+  // wrap render() so custom cuts + recuts draw + count toward the total
+  var _render = render;
+  render = function(){
+    linesEl.querySelectorAll('.cutline').forEach(function(n){ n.remove(); });
+    linesEl.querySelectorAll('.recutline').forEach(function(n){ n.remove(); });
+    _render();
+    var extra = 0;
+    customCuts.forEach(function(c, i){
+      extra += c.amount;
+      var row = document.createElement('div');
+      row.className = 'line cutline';
+      var left = document.createElement('div');
+      var nm = document.createElement('div');
+      nm.className='nm'; nm.textContent = c.species+' '+c.w+'×'+c.t+'×'+c.l+' (custom)';
+      var ea = document.createElement('div');
+      ea.className='ea'; ea.textContent = c.bf+' bd ft × '+c.qty;
+      left.appendChild(nm); left.appendChild(ea);
+      var amt = document.createElement('div');
+      amt.className='nm'; amt.style.fontFamily='var(--mono)'; amt.textContent = money(c.amount);
+      var del = document.createElement('button');
+      del.type='button'; del.className='x'; del.innerHTML='&times;';
+      del.addEventListener('click', function(){ customCuts.splice(i,1); render(); });
+      row.appendChild(left); row.appendChild(amt); row.appendChild(del);
+      linesEl.insertBefore(row, emptyEl);
+      var f = [['cut_species',c.species],['cut_width',c.w],['cut_thick',c.t],
+               ['cut_length',c.l],['cut_qty',c.qty]];
+      f.forEach(function(pair){
+        var h=document.createElement('input'); h.type='hidden';
+        h.name=pair[0]; h.value=pair[1]; row.appendChild(h);
+      });
+    });
+    recuts.forEach(function(c, i){
+      extra += c.amount;
+      var row = document.createElement('div');
+      row.className = 'line recutline';
+      var left = document.createElement('div');
+      var nm = document.createElement('div');
+      nm.className='nm'; nm.textContent = c.species+' '+c.w+'×'+c.t+'×'+c.l+' (recut, cracked)';
+      var ea = document.createElement('div');
+      ea.className='ea'; ea.textContent = c.bf+' bd ft × '+c.qty+' · from '+c.sourceLabel;
+      left.appendChild(nm); left.appendChild(ea);
+      var amt = document.createElement('div');
+      amt.className='nm'; amt.style.fontFamily='var(--mono)'; amt.textContent = money(c.amount);
+      var del = document.createElement('button');
+      del.type='button'; del.className='x'; del.innerHTML='&times;';
+      del.addEventListener('click', function(){ recuts.splice(i,1); render(); });
+      row.appendChild(left); row.appendChild(amt); row.appendChild(del);
+      linesEl.insertBefore(row, emptyEl);
+      var rf = [['recut_source',c.sourceId],['recut_width',c.w],['recut_thick',c.t],
+                ['recut_length',c.l],['recut_qty',c.qty]];
+      rf.forEach(function(pair){
+        var h=document.createElement('input'); h.type='hidden';
+        h.name=pair[0]; h.value=pair[1]; row.appendChild(h);
+      });
+    });
+    if (extra > 0){
+      var cur = parseFloat(totalEl.textContent.replace(/[^0-9.]/g,'')) || 0;
+      totalEl.textContent = money(cur + extra);
+      builder.classList.add('has-items');
+      confirmEl.disabled = false;
+    }
+  };
 
   render();
 })();

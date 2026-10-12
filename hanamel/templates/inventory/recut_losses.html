@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}Recut losses — Hanamel{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Recut losses</h1>
+    <p class="sub">Board feet lost every time a cracked piece is sold at smaller dimensions than it was stocked at.</p>
+  </div>
+  <a href="{% url 'product_list' %}" class="btn btn-ghost">Back to stock</a>
+</div>
+
+<div class="stats" style="margin-bottom:18px">
+  <div class="stat"><div class="k">Board feet lost</div>
+    <div class="v">{{ totals.bf|default:0|floatformat:2 }}</div></div>
+  <div class="stat"><div class="k">Value lost (KSh)</div>
+    <div class="v">{{ totals.value|default:0|amount }}</div></div>
+  <div class="stat"><div class="k">Recuts recorded</div>
+    <div class="v">{{ losses|length }}</div></div>
+</div>
+
+<div class="panel">
+{% if losses %}
+<div class="table-wrap">
+<table>
+  <tr><th>When</th><th>Source piece</th><th>Sold as</th><th class="r">Qty</th>
+      <th class="r">Bd ft lost</th><th class="r">Value lost (KSh)</th><th class="hide-sm">Sale</th></tr>
+  {% for r in losses %}
+  <tr>
+    <td class="meta">{{ r.created_at|date:"j M Y, H:i" }}</td>
+    <td>{{ r.source_product.width_display }}×{{ r.source_product.thickness_display }}×{{ r.source_product.length_display }}
+      <div class="meta">{{ r.source_product.species }}</div></td>
+    <td>{{ r.sold_width|floatformat:-2 }}×{{ r.sold_thickness|floatformat:-2 }}×{{ r.sold_length|floatformat:-2 }}</td>
+    <td class="r num">{{ r.qty|floatformat:0 }}</td>
+    <td class="r num" style="color:var(--oxide);font-weight:600">{{ r.board_feet_lost }}</td>
+    <td class="r num" style="color:var(--oxide);font-weight:600">{{ r.value_lost|amount }}</td>
+    <td class="hide-sm"><a href="{% url 'sale_detail' r.sale.pk %}">{{ r.sale.number }}</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<div class="empty"><p>No recuts recorded yet.</p></div>
+{% endif %}
+</div>
+{% endblock %}

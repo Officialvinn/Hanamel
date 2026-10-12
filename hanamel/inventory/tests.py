@@ -402,11 +402,11 @@ class StockUpdateTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'value="40"')
 
-    def test_setting_a_new_quantity_records_the_delta(self):
+    def test_delivery_adds_to_stock_on_hand(self):
         self.client.post(reverse("stock_update"), {
             "reason": "received", "note": "delivery from Kitale",
-            f"qty_{self.timber.pk}": "65",
-            f"qty_{self.table.pk}": "5"})          # unchanged
+            f"qty_{self.timber.pk}": "25",         # pieces that arrived
+            f"qty_{self.table.pk}": ""})           # nothing arrived
         self.timber.refresh_from_db()
         self.assertEqual(self.timber.stock_qty, Decimal("65"))
 
@@ -417,6 +417,18 @@ class StockUpdateTests(TestCase):
         self.assertEqual(m.reason, "received")
         self.assertEqual(m.note, "delivery from Kitale")
         self.assertEqual(m.user, self.user)
+
+    def test_stock_take_sets_the_absolute_count(self):
+        self.client.post(reverse("stock_update"), {
+            "reason": "count",
+            f"qty_{self.timber.pk}": "65",
+            f"qty_{self.table.pk}": "5"})          # unchanged
+        self.timber.refresh_from_db()
+        self.assertEqual(self.timber.stock_qty, Decimal("65"))
+
+        m = self.SM.objects.get()
+        self.assertEqual(m.product, self.timber)
+        self.assertEqual(m.delta, Decimal("25"))
 
     def test_reducing_stock_records_a_negative_delta(self):
         self.client.post(reverse("stock_update"),
@@ -714,3 +726,80 @@ class CustomOrderTests(TestCase):
     def test_orders_require_login(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("order_list")).status_code, 302)
+
+
+class DoorTests(TestCase):
+    def setUp(self):
+        from .models import StockMovement
+        self.SM = StockMovement
+        self.user = User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+
+    def make_door(self, **kw):
+        fields = dict(type=Product.DOOR, name="Panel door", species="Mahogany",
+                      door_height=2100, door_width=900, door_thickness=45,
+                      price=Decimal("25000"), stock_qty=Decimal("4"))
+        fields.update(kw)
+        return Product.objects.create(**fields)
+
+    def test_door_prices_and_labels(self):
+        d = self.make_door()
+        self.assertEqual(d.unit_price(), Decimal("25000"))
+        self.assertIsNone(d.board_feet)
+        self.assertEqual(str(d), "Mahogany Panel door 2100×900mm")
+        self.assertEqual(d.door_size_imperial, "≈ 6'11\" × 2'11\"")
+        self.assertIn("Main entrance", d.door_standard_label)
+        self.assertEqual(self.make_door(door_width=777).door_standard_label, "Custom size")
+
+    def test_pages_load(self):
+        d = self.make_door()
+        for url in [reverse("door_list"), reverse("door_create"),
+                    reverse("door_edit", args=[d.pk])]:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+        self.assertContains(self.client.get(reverse("door_list")), "2100 × 900 mm")
+
+    def test_add_standard_size_logs_opening_stock(self):
+        self.client.post(reverse("door_create"), {
+            "name": "Flush door", "species": "Cypress", "size": "2100x800",
+            "thickness": "35", "price": "9500", "opening_stock": "6",
+            "low_stock_threshold": "2"})
+        d = Product.objects.get(type=Product.DOOR)
+        self.assertEqual((d.door_height, d.door_width, d.door_thickness), (2100, 800, 35))
+        self.assertEqual(d.stock_qty, Decimal("6"))
+        m = self.SM.objects.get(product=d)
+        self.assertEqual((m.delta, m.reason), (Decimal("6"), "received"))
+
+    def test_add_custom_size(self):
+        self.client.post(reverse("door_create"), {
+            "name": "Store door", "size": "custom", "height": "1950",
+            "width": "650", "thickness": "40", "price": "7000"})
+        d = Product.objects.get(type=Product.DOOR)
+        self.assertEqual((d.door_height, d.door_width), (1950, 650))
+        self.assertFalse(self.SM.objects.exists())     # no opening stock, no movement
+
+    def test_implausible_size_is_refused(self):
+        self.client.post(reverse("door_create"), {
+            "name": "Odd", "size": "custom", "height": "210", "width": "90",
+            "thickness": "45", "price": "7000"})
+        self.assertFalse(Product.objects.filter(type=Product.DOOR).exists())
+
+    def test_edit_keeps_stock(self):
+        d = self.make_door()
+        self.client.post(reverse("door_edit", args=[d.pk]), {
+            "name": "Panel door", "species": "Mahogany", "size": "2100x900",
+            "thickness": "45", "price": "27000", "opening_stock": "99",
+            "low_stock_threshold": "1"})
+        d.refresh_from_db()
+        self.assertEqual(d.price, Decimal("27000"))
+        self.assertEqual(d.stock_qty, Decimal("4"))
+
+    def test_selling_a_door(self):
+        d = self.make_door()
+        self.assertContains(self.client.get(reverse("sale_create")), "Doors")
+        self.client.post(reverse("sale_create"), {
+            "product_id": [str(d.pk)], "qty": ["2"]})
+        item = SaleItem.objects.get()
+        self.assertEqual(item.amount, Decimal("50000.00"))
+        self.assertIsNone(item.board_feet_per_piece)
+        d.refresh_from_db()
+        self.assertEqual(d.stock_qty, Decimal("2"))

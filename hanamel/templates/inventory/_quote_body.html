@@ -1,0 +1,70 @@
+{% load money %}
+{# One quotation. Expects `order` and `biz` in context. #}
+<div class="qdoc">
+  <div class="qcorner-tr"><div class="navy"></div><div class="red"></div></div>
+  <div class="qcorner-bl"><div class="navy"></div><div class="red"></div></div>
+
+  <div class="qhead">
+    {% if biz.logo %}<img class="qlogo" src="{{ biz.logo.url }}" alt="{{ biz.name }}">{% endif %}
+    <h1 class="qtitle">QUOTATION</h1>
+  </div>
+
+  <div class="qmeta">
+    <div>
+      <div class="qlabel">Prepared for</div>
+      <div class="qname">{{ order.customer_name }}</div>
+      {% if order.customer_phone %}<div class="qphone">Tel: {{ order.customer_phone }}</div>{% endif %}
+    </div>
+    <div class="qrefs">
+      <div><span class="qreflabel">Quotation No.</span>{{ order.number }}</div>
+      <div><span class="qreflabel">Date</span>{{ order.created_at|date:"j M Y" }}</div>
+      <div><span class="qreflabel">Valid for</span>{{ biz.quote_validity_days }} days</div>
+    </div>
+  </div>
+
+  {% if order.items.all %}
+  <table class="qtable">
+    <tr><th>#</th><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr>
+    {% for it in order.items.all %}
+    <tr>
+      <td class="qnum">{{ forloop.counter }}</td>
+      <td><div class="qdesc">{{ it.description }}</div>
+        {% if it.detail %}<div class="qdetail">{{ it.detail }}</div>{% endif %}</td>
+      <td class="r">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
+      <td class="r">{{ it.unit_price|amount:0 }}</td>
+      <td class="r qamt">{{ it.amount|amount:0 }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% elif order.description %}
+  <p style="position:relative;z-index:1;white-space:pre-wrap;line-height:1.6">{{ order.description }}</p>
+  {% endif %}
+
+  <div class="qtotal">
+    <div class="qtotal-box"><span class="k">Total</span><span class="v">{{ order.quoted_price|money:0 }}</span></div>
+  </div>
+
+  {% if biz.quote_terms %}
+  <div class="qterms">
+    <div class="qlabel">Terms &amp; Conditions</div>
+    <ul>
+      {% for line in biz.quote_terms.splitlines %}
+      {% if line %}<li>{{ line }}</li>{% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if biz.quote_signee_name %}
+  <div class="qsign">
+    BEST REGARDS<br>
+    <span class="who">{{ biz.quote_signee_name }}</span><br>
+    {{ biz.quote_signee_phone }}
+  </div>
+  {% endif %}
+
+  <div class="qfoot">
+    {% if biz.quote_tagline %}<em>{{ biz.quote_tagline }}</em><br>{% endif %}
+    Thank you for your business — {{ biz.name }}
+  </div>
+</div>

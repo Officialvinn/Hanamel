@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from itertools import groupby
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -16,9 +16,10 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import (BusinessProfile, CustomOrder, CustomOrderPayment,
-                     MpesaTransaction, Payment, Product, Sale, SaleItem,
-                     StockMovement)
+from .models import (DOOR_STANDARD_SIZES, DOOR_STANDARD_THICKNESSES,
+                     BusinessProfile, CustomOrder, CustomOrderItem,
+                     CustomOrderPayment, MpesaTransaction, Payment, Product,
+                     RecutLoss, Sale, SaleItem, StockMovement)
 from .mpesa import normalise_ref, parse_confirmation
 from .templatetags.money import CURRENCY
 
@@ -66,7 +67,7 @@ def product_list(request):
     finished = products.filter(type=Product.FINISHED).order_by("name")
     return render(request, "inventory/product_list.html", {
         "timber_groups": _timber_groups(products),
-        "finished": finished, "q": q, "page": "stock"})
+        "finished": finished, "doors": _doors(products), "q": q, "page": "stock"})
 
 
 @login_required
@@ -81,6 +82,10 @@ def stock_update(request):
         if reason not in dict(StockMovement.REASON_CHOICES):
             reason = StockMovement.COUNT
         note = request.POST.get("note", "").strip()
+        # Deliveries are entered as "how many arrived" and added to whatever
+        # is on hand — never an absolute count, so a delivery can never be
+        # the thing that makes stock go down.
+        is_delivery = reason == StockMovement.RECEIVED
 
         changes, errors = [], []
         for p in products:
@@ -88,15 +93,20 @@ def stock_update(request):
             if raw == "":
                 continue
             try:
-                new_qty = Decimal(raw)
+                value = Decimal(raw)
             except (InvalidOperation, ValueError):
                 errors.append(f"{p} — '{raw}' isn't a number.")
                 continue
-            if new_qty < 0:
-                errors.append(f"{p} — stock can't be negative.")
+            if value < 0:
+                label = "quantity received" if is_delivery else "stock"
+                errors.append(f"{p} — {label} can't be negative.")
                 continue
-            if new_qty != p.stock_qty:
-                changes.append((p, new_qty))
+            if is_delivery:
+                if value == 0:
+                    continue
+                changes.append((p, value))
+            elif value != p.stock_qty:
+                changes.append((p, value))
 
         if errors:
             for e in errors:
@@ -108,8 +118,9 @@ def stock_update(request):
                 ids = [p.pk for p, _ in changes]
                 locked = {p.pk: p for p in
                           Product.objects.select_for_update().filter(pk__in=ids)}
-                for p, new_qty in changes:
+                for p, value in changes:
                     prod = locked[p.pk]
+                    new_qty = prod.stock_qty + value if is_delivery else value
                     delta = new_qty - prod.stock_qty
                     prod.stock_qty = new_qty
                     prod.save(update_fields=["stock_qty"])
@@ -125,6 +136,7 @@ def stock_update(request):
     return render(request, "inventory/stock_update.html", {
         "timber_groups": _timber_groups(products),
         "finished": [p for p in products if p.type == Product.FINISHED],
+        "doors": _doors(products),
         "reasons": StockMovement.REASON_CHOICES,
         "default_reason": StockMovement.COUNT,
         "page": "stock"})
@@ -137,6 +149,128 @@ def stock_history(request, pk):
         "product": product,
         "movements": product.movements.select_related("sale", "user")[:100],
         "page": "stock"})
+
+
+@login_required
+def recut_losses(request):
+    """Every cracked piece sold at smaller dimensions than stocked, and how
+    much board footage/value went to waste on each one."""
+    losses = (RecutLoss.objects.select_related("source_product", "sale")
+              .order_by("-created_at"))
+    totals = losses.aggregate(bf=Sum("board_feet_lost"), value=Sum("value_lost"))
+    return render(request, "inventory/recut_losses.html", {
+        "losses": losses, "totals": totals, "page": "stock"})
+
+
+@login_required
+def door_list(request):
+    doors = _doors(Product.objects.filter(type=Product.DOOR, is_active=True))
+    return render(request, "inventory/door_list.html", {
+        "doors": doors,
+        "in_stock": sum((d.stock_qty for d in doors), Decimal("0")),
+        "stock_value": sum((d.stock_qty * (d.price or 0) for d in doors), Decimal("0")),
+        "page": "doors"})
+
+
+def _door_initial(door):
+    """Form values for a fresh form: the door's own, or sensible defaults."""
+    if door is None:
+        return {"thickness": "40", "opening_stock": "0", "low_stock_threshold": "2"}
+    return {"name": door.name, "species": door.species,
+            "height": door.door_height, "width": door.door_width,
+            "thickness": door.door_thickness, "price": f"{door.price.normalize():f}",
+            "low_stock_threshold": f"{door.low_stock_threshold.normalize():f}"}
+
+
+@login_required
+def door_form(request, pk=None):
+    """Add or edit a stocked door. Size comes from the standard list or is
+    typed in; opening stock is logged as a delivery so the ledger adds up."""
+    door = get_object_or_404(Product, pk=pk, type=Product.DOOR) if pk else None
+    form = request.POST if request.method == "POST" else {}
+
+    if request.method == "POST":
+        errors = []
+        name = form.get("name", "").strip()
+        species = form.get("species", "").strip()
+        if not name:
+            errors.append("Give the door a name, e.g. Panel door.")
+
+        def whole(field, label, required=True):
+            raw = form.get(field, "").strip()
+            if not raw:
+                if required:
+                    errors.append(f"{label} is needed.")
+                return None
+            try:
+                value = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                errors.append(f"{label} isn't a number.")
+                return None
+            if value < 0 or (required and value == 0):
+                errors.append(f"{label} must be more than zero.")
+                return None
+            return value
+
+        size = form.get("size", "")
+        if size and size != "custom":
+            try:
+                height, width = (int(v) for v in size.split("x"))
+            except ValueError:
+                errors.append("Pick a door size.")
+                height = width = None
+        else:
+            height = whole("height", "Height")
+            width = whole("width", "Width")
+        thickness = whole("thickness", "Thickness")
+        price = whole("price", "Price")
+        threshold = whole("low_stock_threshold", "Low-stock alert", required=False)
+        opening = whole("opening_stock", "Opening stock", required=False) if not door else None
+
+        for value, label, lo, hi in ((height, "Height", 1000, 3000),
+                                     (width, "Width", 400, 2400),
+                                     (thickness, "Thickness", 20, 80)):
+            if value is not None and not lo <= value <= hi:
+                errors.append(f"{label} should be between {lo} and {hi} mm.")
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+        else:
+            with transaction.atomic():
+                door = door or Product(type=Product.DOOR)
+                door.name, door.species = name, species
+                door.door_height, door.door_width = int(height), int(width)
+                door.door_thickness = int(thickness)
+                door.price = price
+                if threshold is not None:
+                    door.low_stock_threshold = threshold
+                elif door.pk is None:
+                    door.low_stock_threshold = Decimal("2")
+                door.is_active = form.get("retire") != "on"
+                is_new = door.pk is None
+                if is_new and opening:
+                    door.stock_qty = opening
+                door.save()
+                if is_new and opening:
+                    StockMovement.objects.create(
+                        product=door, delta=opening, resulting_qty=opening,
+                        reason=StockMovement.RECEIVED, note="Opening stock",
+                        user=request.user)
+            messages.success(request, f"{'Added' if is_new else 'Saved'} {door}.")
+            return redirect("door_list")
+
+    species = (Product.objects.exclude(species="")
+               .values_list("species", flat=True).distinct().order_by("species"))
+    current = f"{door.door_height}x{door.door_width}" if door else ""
+    standard = {f"{h}x{w}" for _, sizes in DOOR_STANDARD_SIZES for h, w, _ in sizes}
+    return render(request, "inventory/door_form.html", {
+        "door": door, "form": form, "page": "doors",
+        "sizes": DOOR_STANDARD_SIZES, "thicknesses": DOOR_STANDARD_THICKNESSES,
+        "species_options": species,
+        "values": form or _door_initial(door),
+        "selected_size": form.get("size") or (
+            current if current in standard else ("custom" if door else "2100x900"))})
 
 
 @login_required
@@ -175,7 +309,25 @@ def sale_create(request):
         raw_paid = request.POST.get("amount_paid", "").strip()
         mpesa_ref = request.POST.get("mpesa_receipt", "").strip()
 
+        # Custom cuts: parallel lists of species/dimensions/qty for one-off sizes
+        cut_species = request.POST.getlist("cut_species")
+        cut_width = request.POST.getlist("cut_width")
+        cut_thick = request.POST.getlist("cut_thick")
+        cut_length = request.POST.getlist("cut_length")
+        cut_qty = request.POST.getlist("cut_qty")
+
+        # Recuts: a cracked/damaged piece sold at smaller dimensions than it was
+        # stocked at. Priced at the smaller size, but stock comes off the piece
+        # it actually was.
+        recut_source = request.POST.getlist("recut_source")
+        recut_width = request.POST.getlist("recut_width")
+        recut_thick = request.POST.getlist("recut_thick")
+        recut_length = request.POST.getlist("recut_length")
+        recut_qty = request.POST.getlist("recut_qty")
+
         lines = []
+        custom_lines = []   # (species, w, t, l, qty, rate)
+        recut_lines = []    # (source_product, w, t, l, qty)
         errors = []
         for pid, raw_qty in zip(product_ids, quantities):
             if not pid or not raw_qty:
@@ -193,7 +345,51 @@ def sale_create(request):
                 continue
             lines.append((product, qty))
 
-        if not lines and not errors:
+        # validate custom cuts: need a rate (from species) + three dimensions + qty
+        rates = {p.species: p.rate_per_board_foot
+                 for p in Product.objects.filter(type=Product.TIMBER, is_active=True)
+                 if p.species and p.rate_per_board_foot}
+        for sp, rw, rt, rl, rq in zip(cut_species, cut_width, cut_thick,
+                                      cut_length, cut_qty):
+            if not any([sp, rw, rt, rl, rq]):
+                continue
+            try:
+                w, t, l, q = (Decimal(str(rw)), Decimal(str(rt)),
+                              Decimal(str(rl)), Decimal(str(rq)))
+            except (InvalidOperation, ValueError):
+                errors.append("A custom cut has an invalid number.")
+                continue
+            if min(w, t, l, q) <= 0:
+                errors.append("Custom cut dimensions and quantity must be positive.")
+                continue
+            rate = rates.get(sp)
+            if rate is None:
+                errors.append(f"No rate found for custom cut species '{sp}'.")
+                continue
+            custom_lines.append((sp, w, t, l, q, rate))
+
+        # validate recuts: need an in-stock timber source + three dimensions + qty
+        for pid, rw, rt, rl, rq in zip(recut_source, recut_width, recut_thick,
+                                       recut_length, recut_qty):
+            if not pid or not any([rw, rt, rl, rq]):
+                continue
+            try:
+                w, t, l, q = (Decimal(str(rw)), Decimal(str(rt)),
+                              Decimal(str(rl)), Decimal(str(rq)))
+            except (InvalidOperation, ValueError):
+                errors.append("A recut line has an invalid number.")
+                continue
+            if min(w, t, l, q) <= 0:
+                errors.append("Recut dimensions and quantity must be positive.")
+                continue
+            source = Product.objects.filter(
+                pk=pid, type=Product.TIMBER, is_active=True).first()
+            if not source:
+                errors.append("The piece a recut is coming from is no longer available.")
+                continue
+            recut_lines.append((source, w, t, l, q))
+
+        if not lines and not custom_lines and not recut_lines and not errors:
             errors.append("Add at least one item before recording the sale.")
 
         if errors:
@@ -202,18 +398,28 @@ def sale_create(request):
             return render(request, "inventory/sale_form.html", {
                 "timber_groups": _timber_groups(products),
                 "finished": [p for p in products if p.type == Product.FINISHED],
+                "doors": _doors(products),
                 "catalog_json": _catalog_json(products), "methods": Payment.METHOD_CHOICES,
+                "total_pieces": _total_pieces(products),
                 "page": "new", "customer_name": customer})
 
         try:
             with transaction.atomic():
-                # lock the rows we're about to decrement
-                ids = [p.pk for p, _ in lines]
+                # lock every row we're about to decrement — a recut pulls from
+                # the source piece's stock, so it counts against the same total
+                # as a direct sale of that piece
+                ids = {p.pk for p, _ in lines} | {s.pk for s, _, _, _, _ in recut_lines}
                 locked = {p.pk: p for p in
                           Product.objects.select_for_update().filter(pk__in=ids)}
 
-                short = [f"{locked[p.pk]} (have {locked[p.pk].stock_qty}, need {q})"
-                         for p, q in lines if locked[p.pk].stock_qty < q]
+                demand = {}
+                for p, qty in lines:
+                    demand[p.pk] = demand.get(p.pk, Decimal("0")) + qty
+                for s, _, _, _, qty in recut_lines:
+                    demand[s.pk] = demand.get(s.pk, Decimal("0")) + qty
+
+                short = [f"{locked[pk]} (have {locked[pk].stock_qty}, need {q})"
+                         for pk, q in demand.items() if locked[pk].stock_qty < q]
                 if short:
                     raise ValueError("Not enough stock: " + "; ".join(short))
 
@@ -235,6 +441,52 @@ def sale_create(request):
                         product=prod, delta=-qty, resulting_qty=prod.stock_qty,
                         reason=StockMovement.SALE, sale=sale,
                         user=request.user if request.user.is_authenticated else None)
+
+                # custom cuts: one-off lines, board-foot priced, no stock touched
+                for sp, w, t, l, q, rate in custom_lines:
+                    # whole board feet only — the company doesn't charge for cents
+                    board_feet = ((w * t * l) / Decimal("12")).to_integral_value(rounding=ROUND_FLOOR)
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=None,
+                        custom_description=f"{sp} {w:g}x{t:g}x{l:g} (custom cut)",
+                        qty=q,
+                        board_feet_per_piece=board_feet,
+                        rate=rate,
+                    )
+
+                # recuts: priced at the smaller size actually sold, but the
+                # stock reduction hits the source piece it was cut from
+                for source, w, t, l, qty in recut_lines:
+                    src = locked[source.pk]
+                    # whole board feet only — the company doesn't charge for cents
+                    board_feet = ((w * t * l) / Decimal("12")).to_integral_value(rounding=ROUND_FLOOR)
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=None,
+                        custom_description=(f"{src.species} {w:g}x{t:g}x{l:g} "
+                                            f"(recut from {src.width_display}x"
+                                            f"{src.thickness_display}x{src.length_display}, cracked)"),
+                        qty=qty,
+                        board_feet_per_piece=board_feet,
+                        rate=src.rate_per_board_foot,
+                    )
+                    src.stock_qty = src.stock_qty - qty
+                    src.save(update_fields=["stock_qty"])
+                    StockMovement.objects.create(
+                        product=src, delta=-qty, resulting_qty=src.stock_qty,
+                        reason=StockMovement.SALE, sale=sale,
+                        note=f"Recut & sold as {w:g}x{t:g}x{l:g} (cracked)",
+                        user=request.user if request.user.is_authenticated else None)
+
+                    bf_lost = ((src.board_feet - board_feet) * qty).quantize(Decimal("0.001"))
+                    if bf_lost > 0:
+                        RecutLoss.objects.create(
+                            sale=sale, source_product=src,
+                            sold_width=w, sold_thickness=t, sold_length=l, qty=qty,
+                            board_feet_lost=bf_lost,
+                            value_lost=(bf_lost * src.rate_per_board_foot).quantize(Decimal("0.01")))
+
                 sale.recalculate_total()
 
                 # Record what was actually handed over. Blank means "pay in full";
@@ -255,7 +507,9 @@ def sale_create(request):
             return render(request, "inventory/sale_form.html", {
                 "timber_groups": _timber_groups(products),
                 "finished": [p for p in products if p.type == Product.FINISHED],
+                "doors": _doors(products),
                 "catalog_json": _catalog_json(products), "methods": Payment.METHOD_CHOICES,
+                "total_pieces": _total_pieces(products),
                 "page": "new", "customer_name": customer})
 
         messages.success(request, f"Recorded {sale.number} — KES {sale.total:,.2f}")
@@ -264,8 +518,23 @@ def sale_create(request):
     return render(request, "inventory/sale_form.html", {
         "timber_groups": _timber_groups(products),
         "finished": [p for p in products if p.type == Product.FINISHED],
+        "doors": _doors(products),
         "catalog_json": _catalog_json(products), "page": "new",
+        "total_pieces": _total_pieces(products),
         "methods": Payment.METHOD_CHOICES})
+
+
+def _total_pieces(products):
+    """Every piece across the catalog that's actually in stock, ready to sell."""
+    return sum((p.stock_qty for p in products), Decimal("0"))
+
+
+def _doors(products):
+    """Doors by wood, then tallest and widest first."""
+    doors = [p for p in products if p.type == Product.DOOR]
+    doors.sort(key=lambda p: (p.species, p.name, -(p.door_height or 0),
+                              -(p.door_width or 0)))
+    return doors
 
 
 def _timber_groups(products):
@@ -407,10 +676,12 @@ def export_month(request, year, month):
     for s in sales:
         for it in s.items.all():
             p = it.product
-            size = (f"{p.width:g}x{p.thickness:g}x{p.length:g}"
-                    if p.type == Product.TIMBER and p.width else "")
+            size = (f"{p.width_display}x{p.thickness_display}x{p.length_display}"
+                    if p and p.type == Product.TIMBER and p.width
+                    else p.door_size if p else "")
             values = [s.date.strftime("%Y-%m-%d"), s.number,
-                      s.customer_name or "Walk-in", p.name, p.species or "", size,
+                      s.customer_name or "Walk-in", p.name if p else it.label,
+                      (p.species if p else "") or "", size,
                       float(it.board_feet_per_piece) if it.board_feet_per_piece else "",
                       float(it.qty), float(it.rate), float(it.amount)]
             for c, v in enumerate(values, start=1):
@@ -603,19 +874,43 @@ def order_create(request):
     if request.method == "POST":
         name = request.POST.get("customer_name", "").strip()
         desc = request.POST.get("description", "").strip()
-        raw_price = request.POST.get("quoted_price", "").strip()
+
+        item_desc = request.POST.getlist("item_description")
+        item_detail = request.POST.getlist("item_detail")
+        item_qty = request.POST.getlist("item_qty")
+        item_unit = request.POST.getlist("item_unit")
+        item_price = request.POST.getlist("item_unit_price")
+
         errors = []
         if not name:
             errors.append("A customer name is needed.")
-        if not desc:
-            errors.append("Describe what's being made.")
-        try:
-            price = Decimal(raw_price)
-            if price <= 0:
-                errors.append("The quoted price must be more than zero.")
-        except (InvalidOperation, ValueError):
-            errors.append("The quoted price isn't a valid number.")
-            price = None
+
+        items = []   # (description, detail, qty, unit, unit_price)
+        for d, det, q, u, p in zip(item_desc, item_detail, item_qty, item_unit, item_price):
+            if not d.strip():
+                continue
+            try:
+                qty = Decimal(q) if q.strip() else Decimal("1")
+                price = Decimal(p)
+            except (InvalidOperation, ValueError):
+                errors.append(f"'{d}' has an invalid quantity or price.")
+                continue
+            if qty <= 0 or price <= 0:
+                errors.append(f"'{d}' needs a positive quantity and price.")
+                continue
+            items.append((d.strip(), det.strip(), qty, u.strip() or "pcs", price))
+
+        raw_price = request.POST.get("quoted_price", "").strip()
+        manual_price = None
+        if not items:
+            if not desc:
+                errors.append("Describe what's being made, or add priced line items.")
+            try:
+                manual_price = Decimal(raw_price)
+                if manual_price <= 0:
+                    errors.append("The quoted price must be more than zero.")
+            except (InvalidOperation, ValueError):
+                errors.append("The quoted price isn't a valid number.")
 
         if errors:
             for e in errors:
@@ -627,9 +922,17 @@ def order_create(request):
         order = CustomOrder.objects.create(
             number=_next_order_number(), customer_name=name,
             customer_phone=request.POST.get("customer_phone", "").strip(),
-            description=desc, quoted_price=price,
+            description=desc, quoted_price=manual_price or Decimal("0"),
             target_date=request.POST.get("target_date") or None,
             photo=request.FILES.get("photo"))
+
+        for d, det, qty, unit, price in items:
+            CustomOrderItem.objects.create(
+                order=order, description=d, detail=det,
+                qty=qty, unit=unit, unit_price=price)
+        if items:
+            order.recalculate_price()
+        price = order.quoted_price
 
         raw_dep = request.POST.get("deposit", "").strip()
         if raw_dep:
@@ -652,10 +955,19 @@ def order_create(request):
 
 @login_required
 def order_detail(request, pk):
-    order = get_object_or_404(CustomOrder.objects.prefetch_related("payments"), pk=pk)
+    order = get_object_or_404(
+        CustomOrder.objects.prefetch_related("payments", "items"), pk=pk)
     return render(request, "inventory/order_detail.html", {
         "order": order, "methods": Payment.METHOD_CHOICES,
         "statuses": CustomOrder.STATUS_CHOICES, "page": "orders"})
+
+
+@login_required
+def order_quote(request, pk):
+    """Print-friendly quotation. Rendered on demand, same as sale invoices."""
+    order = get_object_or_404(CustomOrder.objects.prefetch_related("items"), pk=pk)
+    return render(request, "inventory/quotation.html",
+                  {"order": order, "biz": BusinessProfile.get()})
 
 
 @login_required

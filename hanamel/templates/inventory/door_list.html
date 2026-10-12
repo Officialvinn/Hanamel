@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load money %}
+{% block title %}Doors — Hanamel{% endblock %}
+{% block css %}
+.door-ic{display:inline-flex;align-items:flex-end;justify-content:center;width:40px;height:40px}
+.door-ic i{display:block;border:1.5px solid var(--mark-deep);border-radius:2px 2px 0 0;
+  background:var(--mark-soft);position:relative}
+.door-ic i::after{content:"";position:absolute;right:3px;top:52%;width:2px;height:2px;
+  border-radius:50%;background:var(--mark-deep)}
+.door-ic i.dbl::before{content:"";position:absolute;left:50%;top:0;bottom:0;
+  border-left:1.5px solid var(--mark-deep)}
+.door-ic i.dbl::after{right:auto;left:calc(50% - 4px)}
+.std{font-size:.76rem;color:var(--ink-soft)}
+{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Doors</h1><p class="sub">Ready-made doors in standard sizes. Odd sizes go through
+    <a href="{% url 'order_create' %}">a custom order</a>.</p></div>
+  <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+    {% if doors %}<a href="{% url 'stock_update' %}" class="btn btn-ghost">Record delivery</a>{% endif %}
+    <a href="{% url 'door_create' %}" class="btn">Add door</a>
+  </div>
+</div>
+
+{% if doors %}
+<div class="stats" style="margin-bottom:22px">
+  <div class="stat"><div class="k">Door types</div><div class="v">{{ doors|length }}</div></div>
+  <div class="stat"><div class="k">Doors in stock</div><div class="v">{{ in_stock|floatformat:0 }}</div></div>
+  <div class="stat"><div class="k">Stock value</div><div class="v">{{ stock_value|money:0 }}</div></div>
+</div>
+
+<div class="panel">
+<div class="table-wrap">
+<table>
+  <tr><th class="hide-sm"></th><th>Door</th><th>Size</th><th class="r hide-sm">Thick</th>
+      <th class="r">Price (KSh)</th><th class="r">Stock</th><th></th></tr>
+  {% for d in doors %}
+  <tr>
+    <td class="hide-sm"><span class="door-ic">{% if d.door_icon_px %}
+      <i class="{% if d.door_icon_px.double %}dbl{% endif %}"
+         style="width:{{ d.door_icon_px.w }}px;height:{{ d.door_icon_px.h }}px"></i>{% endif %}</span></td>
+    <td>
+      <div>{{ d.name }}</div>
+      <div class="meta">{{ d.species|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="size">{{ d.door_size }}</div>
+      <div class="std">{{ d.door_size_imperial }} · {{ d.door_standard_label }}</div>
+    </td>
+    <td class="r num hide-sm">{{ d.door_thickness }} mm</td>
+    <td class="r num">{{ d.price|amount }}</td>
+    <td class="r num">
+      <a href="{% url 'stock_history' d.pk %}" style="color:inherit">
+      {% if d.stock_qty <= d.low_stock_threshold %}
+        <span class="pill pill-low">{{ d.stock_qty|floatformat:0 }}</span>
+      {% else %}{{ d.stock_qty|floatformat:0 }}{% endif %}
+      </a>
+    </td>
+    <td class="r"><a href="{% url 'door_edit' d.pk %}">Edit</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</div>
+{% else %}
+<div class="panel">
+  <div class="empty">
+    <p>No doors yet. Add each size you keep in stock — pick from the standard
+       sizes (Kenyan 2100 mm, UK, EU, US) or enter your own.</p>
+    <a href="{% url 'door_create' %}" class="btn">Add the first door</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

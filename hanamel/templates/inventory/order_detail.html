@@ -20,7 +20,7 @@
   font-family:var(--mono);font-weight:600;font-size:1.05rem}
 .paylist{font-size:.84rem;color:var(--ink-soft);margin:8px 0 0;padding:0;list-style:none}
 .paylist li{padding:3px 0}
-select,.side input{width:100%;padding:9px 10px;font-size:.92rem}
+select,.side input{width:100%;padding:9px 10px;font-size:1rem}
 @media (max-width:760px){.grid{grid-template-columns:1fr}}
 {% endblock %}
 
@@ -31,7 +31,10 @@ select,.side input{width:100%;padding:9px 10px;font-size:.92rem}
     <p class="sub">{{ order.customer_name }}{% if order.customer_phone %} · {{ order.customer_phone }}{% endif %}
       · created {{ order.created_at|date:"j M Y" }}</p>
   </div>
-  <a href="{% url 'order_list' %}" class="btn btn-ghost">All orders</a>
+  <div style="display:flex;gap:9px">
+    <a href="{% url 'order_list' %}" class="btn btn-ghost">All orders</a>
+    <a href="{% url 'order_quote' order.pk %}" class="btn">Quotation</a>
+  </div>
 </div>
 
 <div class="grid">
@@ -43,7 +46,22 @@ select,.side input{width:100%;padding:9px 10px;font-size:.92rem}
         <span class="meta" style="margin-left:10px">Ready by {{ order.target_date|date:"j M Y" }}</span>
         {% endif %}
       </div>
-      <div class="desc">{{ order.description }}</div>
+      {% if order.description %}<div class="desc">{{ order.description }}</div>{% endif %}
+      {% if order.items.all %}
+      <div class="table-wrap" style="margin-top:14px">
+      <table>
+        <tr><th>Description</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th></tr>
+        {% for it in order.items.all %}
+        <tr>
+          <td>{{ it.description }}{% if it.detail %}<div class="meta">{{ it.detail }}</div>{% endif %}</td>
+          <td class="r num">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
+          <td class="r num">{{ it.unit_price|amount }}</td>
+          <td class="r num">{{ it.amount|amount }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      </div>
+      {% endif %}
       {% if order.photo %}
       <div class="photo"><img src="{{ order.photo.url }}" alt="Reference for {{ order.number }}"></div>
       {% endif %}

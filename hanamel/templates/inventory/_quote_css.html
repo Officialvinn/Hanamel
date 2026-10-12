@@ -1,0 +1,68 @@
+:root{
+  --q-navy:#16264d; --q-navy-deep:#0f1c3a; --q-red:#c8202b;
+  --q-row-alt:#f4f6fa; --q-ink-soft:#5b6472;
+}
+.qdoc{position:relative;overflow:hidden;background:#fff;border:1px solid var(--rule);
+  border-radius:var(--r);padding:38px 42px 30px;max-width:800px;margin:0 auto}
+
+.qcorner-tr{position:absolute;top:0;right:0;width:260px;height:190px;pointer-events:none}
+.qcorner-tr .navy{position:absolute;inset:0;background:var(--q-navy);
+  clip-path:polygon(100% 0, 100% 100%, 15% 0)}
+.qcorner-tr .red{position:absolute;inset:0;background:var(--q-red);
+  clip-path:polygon(100% 0, 100% 55%, 45% 0)}
+
+.qcorner-bl{position:absolute;bottom:0;left:0;width:220px;height:150px;pointer-events:none}
+.qcorner-bl .navy{position:absolute;inset:0;background:var(--q-navy);
+  clip-path:polygon(0 100%, 0 0, 85% 100%)}
+.qcorner-bl .red{position:absolute;inset:0;background:var(--q-red);
+  clip-path:polygon(0 100%, 0 45%, 55% 100%)}
+
+.qhead{position:relative;z-index:1;margin-bottom:22px}
+.qlogo{max-height:64px;max-width:140px;object-fit:contain;display:block;margin-bottom:10px}
+.qtitle{font-size:2.1rem;font-weight:800;letter-spacing:-.01em;margin:0;color:var(--ink)}
+
+.qmeta{position:relative;z-index:1;display:flex;justify-content:space-between;
+  align-items:flex-start;gap:20px;margin-bottom:22px;flex-wrap:wrap}
+.qlabel{font-family:var(--mono);font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--q-red);font-weight:700;margin-bottom:4px}
+.qname{font-size:1.15rem;font-weight:700}
+.qphone{font-size:.86rem;color:var(--q-ink-soft);margin-top:2px}
+.qrefs{text-align:right;font-size:.86rem}
+.qrefs div{margin-bottom:3px}
+.qrefs .qreflabel{font-weight:700;color:var(--ink);margin-right:6px}
+
+.qtable{width:100%;border-collapse:collapse;margin-bottom:4px;position:relative;z-index:1}
+.qtable th{background:var(--q-navy);color:#fff;font-size:.72rem;letter-spacing:.04em;
+  text-transform:uppercase;font-weight:600;padding:10px 12px;text-align:left}
+.qtable th.r,.qtable td.r{text-align:right}
+.qtable td{padding:12px;vertical-align:top;border-bottom:1px solid var(--rule)}
+.qtable tr:nth-child(even) td{background:var(--q-row-alt)}
+.qtable .qnum{font-weight:600;color:var(--q-ink-soft)}
+.qtable .qdesc{font-weight:600}
+.qtable .qdetail{font-size:.8rem;color:var(--q-ink-soft);margin-top:3px;line-height:1.5}
+.qtable .qamt{font-weight:700;font-family:var(--mono)}
+
+.qtotal{display:flex;justify-content:flex-end;margin:16px 0 26px}
+.qtotal-box{background:var(--q-navy);color:#fff;display:flex;gap:28px;align-items:center;
+  padding:12px 22px;border-radius:2px}
+.qtotal-box .k{font-family:var(--mono);font-size:.72rem;letter-spacing:.13em;text-transform:uppercase}
+.qtotal-box .v{font-size:1.25rem;font-weight:700;font-family:var(--mono)}
+
+.qterms{position:relative;z-index:1;margin-bottom:30px;max-width:560px}
+.qterms ul{margin:8px 0 0;padding-left:18px}
+.qterms li{font-size:.86rem;color:var(--ink);margin-bottom:6px;line-height:1.55}
+
+.qsign{position:relative;z-index:1;font-size:.86rem;line-height:1.7;margin-bottom:40px}
+.qsign .who{font-weight:700}
+
+.qfoot{position:relative;z-index:1;text-align:center;font-size:.82rem;color:var(--q-ink-soft);
+  border-top:1px solid var(--rule);padding-top:12px}
+.qfoot em{font-style:italic}
+
+@media print{
+  .topbar,.actions,.noprint{display:none!important}
+  body{background:#fff}
+  .wrap{padding:0;max-width:none}
+  .qdoc{border:none;padding:0;max-width:none;box-shadow:none}
+  @page{margin:14mm}
+}

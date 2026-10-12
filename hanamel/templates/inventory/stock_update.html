@@ -7,12 +7,14 @@
 .srow:last-child{border-bottom:none}
 .srow .nm{font-family:var(--mono);font-weight:600;font-size:.92rem}
 .srow .sub2{font-size:.74rem;color:var(--ink-soft)}
-.srow input{padding:8px 10px;text-align:right;font-size:.95rem}
+.srow input{padding:8px 10px;text-align:right;font-size:1rem}
 .srow input.changed{border-color:var(--mark);background:var(--mark-soft);font-weight:600}
+.srow .now{font-size:.74rem;color:var(--ink-soft)}
 .topform{display:grid;grid-template-columns:220px 1fr;gap:14px;margin-bottom:20px;
   align-items:end}
 .savebar{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--rule);
-  padding:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:flex;
+  justify-content:space-between;align-items:center;gap:14px;
   box-shadow:0 -6px 20px rgba(24,32,40,.08);border-radius:0 0 var(--r) var(--r)}
 .savebar .count{font-family:var(--mono);font-size:.8rem;color:var(--ink-soft)}
 @media (max-width:640px){.topform{grid-template-columns:1fr}}
@@ -22,7 +24,7 @@
 <div class="head">
   <div>
     <h1>Update stock</h1>
-    <p class="sub">Type the quantity you actually have. Leave anything unchanged alone.</p>
+    <p class="sub" id="modehint">Type the quantity you actually have. Leave anything unchanged alone.</p>
   </div>
   <a href="{% url 'product_list' %}" class="btn btn-ghost">Cancel</a>
 </div>
@@ -50,11 +52,13 @@
     {% for p in g.items %}
     <div class="srow">
       <div>
-        <div class="nm">{{ p.width|floatformat:0 }}×{{ p.thickness|floatformat:0 }}×{{ p.length|floatformat:0 }}</div>
-        <div class="sub2">{{ p.board_feet }} bd ft · {{ p.unit_price|money:0 }} each</div>
+        <div class="nm">{{ p.width_display }}×{{ p.thickness_display }}×{{ p.length_display }}</div>
+        <div class="sub2">{{ p.board_feet }} bd ft · {{ p.unit_price|money:0 }} each
+          · <span class="now">now: {{ p.stock_qty|floatformat:0 }}</span></div>
       </div>
       <input type="number" step="0.01" min="0" name="qty_{{ p.pk }}"
-             value="{{ p.stock_qty|floatformat:0 }}" data-start="{{ p.stock_qty|floatformat:0 }}"
+             value="{{ p.stock_qty|floatformat:0 }}" data-stock="{{ p.stock_qty|floatformat:0 }}"
+             data-start="{{ p.stock_qty|floatformat:0 }}"
              aria-label="Quantity for {{ p }}">
     </div>
     {% endfor %}
@@ -68,11 +72,32 @@
     <div class="srow">
       <div>
         <div class="nm">{{ p.name }}</div>
-        <div class="sub2">{{ p.price|money:0 }} each</div>
+        <div class="sub2">{{ p.price|money:0 }} each
+          · <span class="now">now: {{ p.stock_qty|floatformat:0 }}</span></div>
       </div>
       <input type="number" step="0.01" min="0" name="qty_{{ p.pk }}"
-             value="{{ p.stock_qty|floatformat:0 }}" data-start="{{ p.stock_qty|floatformat:0 }}"
+             value="{{ p.stock_qty|floatformat:0 }}" data-stock="{{ p.stock_qty|floatformat:0 }}"
+             data-start="{{ p.stock_qty|floatformat:0 }}"
              aria-label="Quantity for {{ p.name }}">
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if doors %}
+  <h2>Doors</h2>
+  <div class="panel">
+    {% for p in doors %}
+    <div class="srow">
+      <div>
+        <div class="nm">{% if p.species %}{{ p.species }} {% endif %}{{ p.name }} · {{ p.door_size }}</div>
+        <div class="sub2">{{ p.price|money:0 }} each
+          · <span class="now">now: {{ p.stock_qty|floatformat:0 }}</span></div>
+      </div>
+      <input type="number" step="0.01" min="0" name="qty_{{ p.pk }}"
+             value="{{ p.stock_qty|floatformat:0 }}" data-stock="{{ p.stock_qty|floatformat:0 }}"
+             data-start="{{ p.stock_qty|floatformat:0 }}"
+             aria-label="Quantity for {{ p }}">
     </div>
     {% endfor %}
   </div>
@@ -93,6 +118,15 @@
   var inputs = Array.prototype.slice.call(document.querySelectorAll('.srow input'));
   var label = document.getElementById('changed');
   var save = document.getElementById('save');
+  var reasonSelect = document.getElementById('reason');
+  var hint = document.getElementById('modehint');
+
+  var HINTS = {
+    received: "Type how many pieces arrived, per item. It's added to what's " +
+      "already on hand automatically — you don't need to work out the new total. " +
+      "Leave anything you didn't receive blank.",
+    default: 'Type the quantity you actually have. Leave anything unchanged alone.'
+  };
 
   function sync() {
     var n = 0;
@@ -104,7 +138,26 @@
     label.textContent = n ? n + ' item' + (n === 1 ? '' : 's') + ' changed' : 'No changes yet';
     save.disabled = n === 0;
   }
+
+  function applyMode() {
+    var delivery = reasonSelect.value === 'received';
+    hint.textContent = delivery ? HINTS.received : HINTS.default;
+    inputs.forEach(function (i) {
+      if (delivery) {
+        i.value = '';
+        i.dataset.start = '0';
+        i.placeholder = '0';
+      } else {
+        i.value = i.dataset.stock;
+        i.dataset.start = i.dataset.stock;
+        i.placeholder = '';
+      }
+    });
+    sync();
+  }
+
   inputs.forEach(function (i) { i.addEventListener('input', sync); });
+  reasonSelect.addEventListener('change', applyMode);
   sync();
 })();
 </script>

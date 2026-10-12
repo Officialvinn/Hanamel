@@ -20,7 +20,7 @@
       <th class="r">Qty</th><th class="r">Amount (KSh)</th></tr>
   {% for it in sale.items.all %}
   <tr>
-    <td style="min-width:120px"><span class="size">{{ it.product }}</span></td>
+    <td style="min-width:120px"><span class="size">{{ it.label }}</span></td>
     <td class="r num hide-sm">{{ it.board_feet_per_piece|default:"—" }}</td>
     <td class="r num">{{ it.rate|amount }}</td>
     <td class="r num">{{ it.qty|floatformat:0 }}</td>

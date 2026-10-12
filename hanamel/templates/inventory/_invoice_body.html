@@ -2,12 +2,15 @@
 {# One invoice. Expects `sale` and `biz` in context. #}
 <div class="doc">
   <div class="doc-head">
-    <div>
-      <h1 class="biz-name">{{ biz.name }}</h1>
-      <div class="biz-meta">
-        {% if biz.address %}{{ biz.address }}<br>{% endif %}
-        {% if biz.phone %}{{ biz.phone }}<br>{% endif %}
-        {% if biz.kra_pin %}PIN: {{ biz.kra_pin }}{% endif %}
+    <div class="biz-block">
+      {% if biz.logo %}<img class="biz-logo" src="{{ biz.logo.url }}" alt="{{ biz.name }}">{% endif %}
+      <div>
+        <h1 class="biz-name">{{ biz.name }}</h1>
+        <div class="biz-meta">
+          {% if biz.address %}{{ biz.address }}<br>{% endif %}
+          {% if biz.phone %}{{ biz.phone }}<br>{% endif %}
+          {% if biz.kra_pin %}PIN: {{ biz.kra_pin }}{% endif %}
+        </div>
       </div>
     </div>
     <div class="doc-kind">
@@ -33,7 +36,7 @@
     </tr>
     {% for it in sale.items.all %}
     <tr>
-      <td>{{ it.product }}</td>
+      <td>{{ it.label }}</td>
       <td class="r num">{{ it.board_feet_per_piece|default:"—" }}</td>
       <td class="r num">{{ it.rate|amount }}</td>
       <td class="r num">{{ it.qty|floatformat:0 }}</td>

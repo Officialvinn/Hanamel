@@ -4,10 +4,58 @@ from django.db import models
 from django.utils import timezone
 
 
+def _trim(value):
+    """Decimal for display: drop trailing zeros (6.00 -> 6, 2.50 -> 2.5)
+    without falling into scientific notation for whole numbers."""
+    if value is None:
+        return None
+    d = Decimal(value).normalize()
+    _, _, exponent = d.as_tuple()
+    return d.quantize(Decimal(1)) if exponent > 0 else d
+
+
+# Standard door leaf sizes (height, width in mm) the yard can stock, grouped
+# by the market they come from. Kenyan joinery works to 2100mm height.
+DOOR_STANDARD_SIZES = [
+    ("Kenya / East Africa", [
+        (2100, 900, "Main entrance (7' × 3')"),
+        (2100, 800, "Bedroom"),
+        (2100, 750, "Bathroom"),
+        (2100, 700, "Toilet / store"),
+        (2100, 1200, "Double, 2 × 600"),
+        (2100, 1500, "Double, 2 × 750"),
+        (2100, 1800, "Double, 2 × 900"),
+    ]),
+    ("UK / Europe", [
+        (1981, 762, "UK 6'6\" × 2'6\""),
+        (1981, 838, "UK 6'6\" × 2'9\""),
+        (2040, 826, "UK metric"),
+        (2000, 800, "EU interior"),
+        (2000, 900, "EU entrance"),
+    ]),
+    ("North America", [
+        (2032, 762, "US 80\" × 30\""),
+        (2032, 813, "US 80\" × 32\""),
+        (2032, 914, "US 80\" × 36\" entrance"),
+        (2032, 1524, "US double 80\" × 60\""),
+    ]),
+]
+
+# Leaf thickness in mm: 35 interior, 40 heavy interior, 45 exterior.
+DOOR_STANDARD_THICKNESSES = [35, 40, 45]
+
+
+def _feet_inches(mm):
+    """2100 -> 6'11" (nearest inch). Approximate — the mm figure is the truth."""
+    inches = round(mm / Decimal("25.4"))
+    return f"{inches // 12}'{inches % 12}\""
+
+
 class Product(models.Model):
     TIMBER = "timber"
     FINISHED = "finished"
-    TYPE_CHOICES = [(TIMBER, "Timber"), (FINISHED, "Finished Product")]
+    DOOR = "door"
+    TYPE_CHOICES = [(TIMBER, "Timber"), (FINISHED, "Finished Product"), (DOOR, "Door")]
 
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     name = models.CharField(max_length=120)
@@ -36,9 +84,26 @@ class Product(models.Model):
     length = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                  help_text="feet")
 
+    # Door leaf dimensions in MILLIMETRES. Doors only; priced with `price`.
+    door_height = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
+    door_width = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
+    door_thickness = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
+
     # --- conversion constants (change these if the yard's units differ) ---
     INCH_TO_M = Decimal("0.0254")
     FOOT_TO_M = Decimal("0.3048")
+
+    @property
+    def width_display(self):
+        return _trim(self.width)
+
+    @property
+    def thickness_display(self):
+        return _trim(self.thickness)
+
+    @property
+    def length_display(self):
+        return _trim(self.length)
 
     @property
     def board_feet(self):
@@ -66,16 +131,50 @@ class Product(models.Model):
 
     def unit_price(self):
         """Price of one unit, whichever product type this is."""
-        if self.type == self.FINISHED:
+        if self.type in (self.FINISHED, self.DOOR):
             return self.price
         bf = self.board_feet
         if bf is None or self.rate_per_board_foot is None:
             return None
         return (bf * self.rate_per_board_foot).quantize(Decimal("0.01"))
 
+    @property
+    def door_size(self):
+        """'2100 × 900 mm' — height first, as joiners say it."""
+        if self.type != self.DOOR or not (self.door_height and self.door_width):
+            return ""
+        return f"{self.door_height} × {self.door_width} mm"
+
+    @property
+    def door_size_imperial(self):
+        if self.type != self.DOOR or not (self.door_height and self.door_width):
+            return ""
+        return f"≈ {_feet_inches(self.door_height)} × {_feet_inches(self.door_width)}"
+
+    @property
+    def door_icon_px(self):
+        """Proportional door outline for lists: fixed height, true width."""
+        if self.type != self.DOOR or not (self.door_height and self.door_width):
+            return None
+        h = 38
+        return {"w": round(h * self.door_width / self.door_height, 1), "h": h,
+                "double": self.door_width >= 1200}
+
+    @property
+    def door_standard_label(self):
+        """Which standard this size matches, e.g. 'Kenya / East Africa · Bedroom'."""
+        for region, sizes in DOOR_STANDARD_SIZES:
+            for h, w, label in sizes:
+                if (h, w) == (self.door_height, self.door_width):
+                    return f"{region} · {label}"
+        return "Custom size"
+
     def __str__(self):
         if self.type == self.TIMBER:
-            return f"{self.name} {self.width}x{self.thickness}x{self.length}"
+            return f"{self.name} {self.width_display}x{self.thickness_display}x{self.length_display}"
+        if self.type == self.DOOR:
+            name = f"{self.species} {self.name}" if self.species else self.name
+            return f"{name} {self.door_height}×{self.door_width}mm"
         return self.name
 
 
@@ -113,7 +212,10 @@ class Sale(models.Model):
 
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, related_name="items", on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT,
+                                null=True, blank=True)
+    # set only for one-off custom cuts that aren't in the catalog
+    custom_description = models.CharField(max_length=140, blank=True)
     qty = models.DecimalField(max_digits=10, decimal_places=2)
 
     # snapshots at time of sale — these freeze the sale's history
@@ -130,8 +232,13 @@ class SaleItem(models.Model):
             self.amount = (self.qty * self.rate).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
+    @property
+    def label(self):
+        """What to show on invoices and lists, product or custom cut."""
+        return self.custom_description if self.custom_description else str(self.product)
+
     def __str__(self):
-        return f"{self.qty} x {self.product}"
+        return f"{self.qty} x {self.label}"
 
 
 # --- presentational helpers -------------------------------------------------
@@ -155,6 +262,8 @@ Product.cross_section_px = property(_cross_section_px)
 class BusinessProfile(models.Model):
     """Single row holding the details printed on invoices. Edit in admin."""
     name = models.CharField(max_length=120, default="Hanamel Timber")
+    logo = models.ImageField(upload_to="business/", null=True, blank=True,
+                             help_text="Shown on invoices and quotations")
     kra_pin = models.CharField(max_length=20, blank=True, help_text="Seller KRA PIN")
     phone = models.CharField(max_length=40, blank=True)
     address = models.CharField(max_length=200, blank=True)
@@ -163,6 +272,21 @@ class BusinessProfile(models.Model):
     footer_note = models.CharField(
         max_length=200, blank=True,
         default="Goods remain the property of the seller until paid in full.")
+
+    quote_tagline = models.CharField(
+        max_length=120, blank=True, default="Quality is our goal",
+        help_text="Shown in the footer of quotations")
+    quote_validity_days = models.PositiveIntegerField(
+        default=30, help_text="How many days a quotation stays valid")
+    quote_terms = models.TextField(
+        blank=True, help_text="One term per line, shown as bullets on quotations",
+        default=("All prices are in Kenya Shillings (KSh) and cover materials, "
+                 "fittings and labour as listed.\n"
+                 "This is made-to-order work. A deposit of 50% is required before "
+                 "production begins; the balance is due on collection."))
+    quote_signee_name = models.CharField(
+        max_length=120, blank=True, help_text="Who signs off quotations, e.g. George Mbatia")
+    quote_signee_phone = models.CharField(max_length=40, blank=True)
 
     class Meta:
         verbose_name = "Business profile"
@@ -237,6 +361,30 @@ class StockMovement(models.Model):
         return f"{self.product}: {sign}{self.delta} ({self.get_reason_display()})"
 
 
+class RecutLoss(models.Model):
+    """Board feet lost every time a cracked piece is sold at smaller dimensions
+    than it was stocked at — the offcut that never becomes revenue."""
+    sale = models.ForeignKey(Sale, related_name="recut_losses", on_delete=models.CASCADE)
+    source_product = models.ForeignKey(Product, related_name="recut_losses",
+                                       on_delete=models.PROTECT)
+    sold_width = models.DecimalField(max_digits=6, decimal_places=2)
+    sold_thickness = models.DecimalField(max_digits=6, decimal_places=2)
+    sold_length = models.DecimalField(max_digits=6, decimal_places=2)
+    qty = models.DecimalField(max_digits=10, decimal_places=2)
+    board_feet_lost = models.DecimalField(max_digits=10, decimal_places=3,
+                                          help_text="Total across qty, not per piece")
+    value_lost = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (f"{self.source_product} sold as "
+                f"{self.sold_width:g}x{self.sold_thickness:g}x{self.sold_length:g}"
+                f" — {self.board_feet_lost} bd ft lost")
+
+
 class MpesaTransaction(models.Model):
     """Every payment Safaricom tells us about, stored exactly as received.
 
@@ -294,7 +442,9 @@ class CustomOrder(models.Model):
     number = models.CharField(max_length=24, unique=True, blank=True)
     customer_name = models.CharField(max_length=140)
     customer_phone = models.CharField(max_length=40, blank=True)
-    description = models.TextField(help_text="What the customer wants built")
+    description = models.TextField(
+        blank=True, help_text="Overview of what's being built (optional — the "
+        "priced line items below carry the detail)")
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=QUOTED)
 
     quoted_price = models.DecimalField(max_digits=12, decimal_places=2,
@@ -326,8 +476,35 @@ class CustomOrder(models.Model):
     def is_open(self):
         return self.status in self.OPEN_STATUSES
 
+    def recalculate_price(self):
+        self.quoted_price = sum((it.amount for it in self.items.all()), Decimal("0.00"))
+        self.save(update_fields=["quoted_price"])
+
     def __str__(self):
         return f"{self.number} — {self.customer_name}"
+
+
+class CustomOrderItem(models.Model):
+    """One priced line on a quotation, e.g. '10 sets of mahogany doors'."""
+    order = models.ForeignKey(CustomOrder, related_name="items", on_delete=models.CASCADE)
+    description = models.CharField(max_length=200)
+    detail = models.CharField(
+        max_length=300, blank=True,
+        help_text="Extra breakdown shown under the description, e.g. fittings list")
+    qty = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit = models.CharField(max_length=20, default="pcs", help_text="e.g. pcs, sets, hours")
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    def save(self, *args, **kwargs):
+        self.amount = (self.qty * self.unit_price).quantize(Decimal("0.01"))
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.qty:g} {self.unit} x {self.description}"
 
 
 class CustomOrderPayment(models.Model):

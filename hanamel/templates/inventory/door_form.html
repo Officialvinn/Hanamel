@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{% if door %}Edit door{% else %}Add door{% endif %} — Hanamel{% endblock %}
+{% block css %}
+.formwrap{max-width:680px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.sizebox{display:grid;grid-template-columns:1fr 120px;gap:18px;align-items:center;
+  border:1px solid var(--rule);border-radius:var(--r);padding:16px;margin-bottom:18px;background:#FBFDFC}
+.sizebox .field:last-child{margin-bottom:0}
+.preview{display:flex;flex-direction:column;align-items:center;gap:8px}
+.preview .frame{height:120px;display:flex;align-items:flex-end}
+.preview i{display:block;border:2px solid var(--mark-deep);border-radius:3px 3px 0 0;
+  background:var(--mark-soft);position:relative;transition:width .2s ease}
+.preview i::after{content:"";position:absolute;right:6px;top:52%;width:4px;height:4px;
+  border-radius:50%;background:var(--mark-deep)}
+.preview i.dbl::before{content:"";position:absolute;left:50%;top:0;bottom:0;
+  border-left:2px solid var(--mark-deep)}
+.preview i.dbl::after{right:auto;left:calc(50% - 8px)}
+.preview .dim{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);text-align:center;line-height:1.4}
+.hint{font-size:.8rem;color:var(--ink-soft);margin-top:6px}
+.opt{text-transform:none;letter-spacing:0}
+.check{display:flex;gap:10px;align-items:center;font-size:.92rem;margin:8px 0 0}
+.check input{width:auto}
+@media (max-width:560px){.row2,.row3,.sizebox{grid-template-columns:1fr}
+  .preview{order:-1}}
+{% endblock %}
+
+{% block content %}
+<h1>{% if door %}Edit door{% else %}Add door{% endif %}</h1>
+<p class="sub">{% if door %}Stock changes go through <a href="{% url 'stock_update' %}">Update stock</a>.
+  {% else %}One entry per size you keep in stock.{% endif %}</p>
+
+<form method="post" class="formwrap">
+  {% csrf_token %}
+  <div class="row2">
+    <div class="field">
+      <label for="nm">Door</label>
+      <input type="text" id="nm" name="name" list="door-names" required
+             value="{{ values.name }}" placeholder="e.g. Panel door">
+      <datalist id="door-names">
+        <option value="Panel door"><option value="Flush door"><option value="Main door">
+        <option value="Louvre door"><option value="Glass-panel door"><option value="Batten door">
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="sp">Wood <span class="opt">(optional)</span></label>
+      <input type="text" id="sp" name="species" list="woods"
+             value="{{ values.species }}" placeholder="e.g. Mahogany">
+      <datalist id="woods">
+        {% for s in species_options %}<option value="{{ s }}">{% endfor %}
+        <option value="Mahogany"><option value="Mvule"><option value="Cypress">
+        <option value="Pine"><option value="Meranti">
+      </datalist>
+    </div>
+  </div>
+
+  <div class="sizebox">
+    <div>
+      <div class="field">
+        <label for="size">Size (height × width)</label>
+        <select id="size" name="size">
+          {% for region, opts in sizes %}
+          <optgroup label="{{ region }}">
+            {% for h, w, lab in opts %}
+            <option value="{{ h }}x{{ w }}" data-h="{{ h }}" data-w="{{ w }}">{{ h }} × {{ w }} mm — {{ lab }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+          <option value="custom">Custom size…</option>
+        </select>
+      </div>
+      <div class="row2" id="custom" hidden>
+        <div class="field">
+          <label for="h">Height (mm)</label>
+          <input type="number" id="h" name="height" min="1000" max="3000" step="1"
+                 value="{{ values.height }}">
+        </div>
+        <div class="field">
+          <label for="w">Width (mm)</label>
+          <input type="number" id="w" name="width" min="400" max="2400" step="1"
+                 value="{{ values.width }}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="th">Thickness (mm)</label>
+        <select id="th" name="thickness">
+          {% for t in thicknesses %}<option value="{{ t }}">{{ t }} mm{% if t == 35 %} — interior{% elif t == 40 %} — heavy interior{% elif t == 45 %} — exterior{% endif %}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="preview" aria-hidden="true">
+      <div class="frame"><i id="pv"></i></div>
+      <div class="dim" id="pvdim"></div>
+    </div>
+  </div>
+
+  <div class="row3">
+    <div class="field">
+      <label for="pr">Price (KSh)</label>
+      <input type="number" id="pr" name="price" min="1" step="0.01" required
+             value="{{ values.price }}">
+    </div>
+    {% if not door %}
+    <div class="field">
+      <label for="os">In stock now</label>
+      <input type="number" id="os" name="opening_stock" min="0" step="1"
+             value="{{ values.opening_stock }}">
+    </div>
+    {% endif %}
+    <div class="field">
+      <label for="ls">Low-stock alert at</label>
+      <input type="number" id="ls" name="low_stock_threshold" min="0" step="1"
+             value="{{ values.low_stock_threshold }}">
+    </div>
+  </div>
+
+  {% if door %}
+  <label class="check"><input type="checkbox" name="retire"> Retire this door (hide it from sales and stock)</label>
+  {% endif %}
+
+  <div style="margin-top:22px;display:flex;gap:10px">
+    <a href="{% url 'door_list' %}" class="btn btn-ghost">Cancel</a>
+    <button type="submit" class="btn">{% if door %}Save door{% else %}Add door{% endif %}</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block js %}
+<script>
+(function(){
+  var size = document.getElementById('size'), custom = document.getElementById('custom');
+  var h = document.getElementById('h'), w = document.getElementById('w');
+  var th = document.getElementById('th');
+  var pv = document.getElementById('pv'), pvdim = document.getElementById('pvdim');
+
+  size.value = '{{ selected_size|escapejs }}';
+  if (size.selectedIndex < 0) size.value = 'custom';
+  th.value = '{{ values.thickness|escapejs }}';
+  if (th.selectedIndex < 0) th.value = '40';
+
+  function ftin(mm){
+    var inches = Math.round(mm / 25.4);
+    return Math.floor(inches / 12) + "'" + (inches % 12) + '"';
+  }
+
+  function sync(){
+    var isCustom = size.value === 'custom';
+    custom.hidden = !isCustom;
+    h.required = w.required = isCustom;
+    var opt = size.options[size.selectedIndex];
+    var H = isCustom ? parseFloat(h.value) : parseFloat(opt.dataset.h);
+    var W = isCustom ? parseFloat(w.value) : parseFloat(opt.dataset.w);
+    if (!(H > 0 && W > 0)) { pv.style.width = '0'; pvdim.textContent = ''; return; }
+    var px = 116;
+    pv.style.height = px + 'px';
+    pv.style.width = Math.min(px * W / H, 116) + 'px';
+    pv.classList.toggle('dbl', W >= 1200);
+    pvdim.innerHTML = H + ' × ' + W + ' mm<br>≈ ' + ftin(H) + ' × ' + ftin(W);
+  }
+  [size, h, w].forEach(function(el){ el.addEventListener('input', sync);
+                                      el.addEventListener('change', sync); });
+  sync();
+})();
+</script>
+{% endblock %}

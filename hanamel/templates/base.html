@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Hanamel{% endblock %}</title>
 <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
@@ -52,6 +52,16 @@ a:hover{text-decoration:underline}
 .topbar nav a:hover{color:var(--ink);text-decoration:none}
 .topbar nav a.on{color:var(--mark-deep);border-bottom-color:var(--mark);font-weight:600}
 .topbar .who{font-family:var(--mono);font-size:.75rem;color:var(--ink-soft);flex:none}
+.topbar nav .navwho{display:none}
+
+.navtoggle{display:none;flex-direction:column;justify-content:center;align-items:center;
+  gap:4px;background:none;border:1px solid var(--rule);border-radius:var(--r);
+  width:40px;height:40px;flex:none;cursor:pointer;padding:0;margin-left:auto}
+.navtoggle .bar{display:block;width:18px;height:2px;background:var(--ink);border-radius:1px;
+  transition:transform .15s ease,opacity .15s ease}
+.navtoggle[aria-expanded="true"] .bar:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.navtoggle[aria-expanded="true"] .bar:nth-child(2){opacity:0}
+.navtoggle[aria-expanded="true"] .bar:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
 
 .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 72px}
 h1{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;margin:0 0 4px}
@@ -128,12 +138,34 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
 .empty{padding:44px 20px;text-align:center;color:var(--ink-soft);font-size:.92rem}
 .empty p{margin:0 0 16px}
 
+.navhead{display:none}   /* drawer close button: phones only */
+
 @media (max-width:640px){
-  .topbar{flex-direction:column;align-items:stretch;gap:0;padding:0 14px;min-height:0}
-  .brand{padding:11px 0 8px;gap:9px}
+  .topbar{padding:0 14px;min-height:56px}
+  .brand{padding:0;gap:9px}
   .brand-mark{height:26px}
-  .topbar nav{gap:20px;border-top:1px solid var(--rule);margin:0 -14px;padding:0 14px}
-  .topbar nav a{padding:12px 0;font-size:.88rem}
+  .navtoggle{display:flex}
+
+  .navbackdrop{position:fixed;inset:0;background:rgba(15,20,25,.45);opacity:0;
+    pointer-events:none;transition:opacity .2s ease;z-index:39}
+  .navbackdrop.open{opacity:1;pointer-events:auto}
+
+  .topbar nav{position:fixed;top:0;right:0;bottom:0;width:82vw;max-width:300px;
+    display:flex;flex-direction:column;gap:0;flex-wrap:nowrap;overflow-x:visible;
+    overflow-y:auto;background:var(--card);box-shadow:-10px 0 30px rgba(24,32,40,.2);
+    transform:translateX(100%);transition:transform .25s ease;z-index:40;
+    padding:calc(10px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom))}
+  .topbar nav.open{transform:translateX(0)}
+  .navhead{display:flex;justify-content:flex-end;padding:0 10px 4px}
+  .navclosebtn{background:none;border:none;color:var(--ink-soft);cursor:pointer;
+    font-size:1.6rem;line-height:1;width:40px;height:40px}
+  .topbar nav a{padding:14px 20px;font-size:.95rem;border-bottom:1px solid var(--rule);
+    white-space:normal}
+  .topbar nav a:last-child{border-bottom:none}
+  .topbar nav a.on{background:var(--mark-soft)}
+  .topbar nav .navwho{display:block;padding:12px 20px;border-top:1px solid var(--rule);
+    background:#FBFDFC}
+  body.nav-open{overflow:hidden}
   .wrap{padding:20px 14px 60px}
   .hide-sm{display:none}
   th,td{padding:9px 8px;font-size:.82rem}
@@ -151,18 +183,28 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
     <span>Hanamel</span>
   </a>
   {% if user.is_authenticated %}
-  <nav>
+  <button type="button" class="navtoggle" id="navtoggle" aria-expanded="false"
+          aria-controls="mainnav" aria-label="Toggle menu">
+    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+  </button>
+  <nav id="mainnav">
+    <div class="navhead">
+      <button type="button" class="navclosebtn" id="navclosebtn" aria-label="Close menu">&times;</button>
+    </div>
     <a href="{% url 'dashboard' %}" class="{% if page == 'dash' %}on{% endif %}">Overview</a>
     <a href="{% url 'sale_create' %}" class="{% if page == 'new' %}on{% endif %}">Record sale</a>
     <a href="{% url 'sale_list' %}" class="{% if page == 'sales' %}on{% endif %}">Sales</a>
     <a href="{% url 'order_list' %}" class="{% if page == 'orders' %}on{% endif %}">Orders</a>
+    <a href="{% url 'door_list' %}" class="{% if page == 'doors' %}on{% endif %}">Doors</a>
     <a href="{% url 'product_list' %}" class="{% if page == 'stock' %}on{% endif %}">Stock</a>
     {% mpesa_enabled as show_mpesa %}
     {% if show_mpesa %}
     <a href="{% url 'mpesa_reconcile' %}" class="{% if page == 'mpesa' %}on{% endif %}">M-Pesa</a>
     {% endif %}
     <a href="{% url 'reports' %}" class="{% if page == 'reports' %}on{% endif %}">Reports</a>
+    <span class="who navwho">{{ user.username }}</span>
   </nav>
+  <div class="navbackdrop" id="navbackdrop"></div>
   <span class="who hide-sm">{{ user.username }}</span>
   {% endif %}
 </header>
@@ -179,6 +221,36 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('{% url "service_worker" %}').catch(function () {});
   });
 }
+(function () {
+  var toggle = document.getElementById('navtoggle');
+  var nav = document.getElementById('mainnav');
+  var backdrop = document.getElementById('navbackdrop');
+  var closeBtn = document.getElementById('navclosebtn');
+  if (!toggle || !nav) return;
+
+  function close() {
+    nav.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('open');
+    document.body.classList.remove('nav-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+  function open() {
+    nav.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
+    document.body.classList.add('nav-open');
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+
+  toggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    nav.classList.contains('open') ? close() : open();
+  });
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  if (backdrop) backdrop.addEventListener('click', close);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+  });
+})();
 </script>
 </body>
 </html>

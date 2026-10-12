@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (BusinessProfile, CustomOrder, CustomOrderPayment, Payment,
-                     Product, Sale, SaleItem, StockMovement)
+                     Product, RecutLoss, Sale, SaleItem, StockMovement)
 
 
 @admin.register(Product)
@@ -13,7 +13,9 @@ class ProductAdmin(admin.ModelAdmin):
     @admin.display(description="Dimensions (in x in x ft)")
     def dimensions(self, obj):
         if obj.type == Product.TIMBER:
-            return f"{obj.thickness} x {obj.width} x {obj.length}"
+            return f"{obj.thickness_display} x {obj.width_display} x {obj.length_display}"
+        if obj.type == Product.DOOR:
+            return obj.door_size or "-"
         return "-"
 
 
@@ -43,6 +45,14 @@ class SaleAdmin(admin.ModelAdmin):
     search_fields = ("number", "customer_name")
     inlines = [SaleItemInline, PaymentInline]
     readonly_fields = ("total",)
+
+
+@admin.register(RecutLoss)
+class RecutLossAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "source_product", "sold_width", "sold_thickness",
+                    "sold_length", "qty", "board_feet_lost", "value_lost", "sale")
+    list_filter = ("source_product__species",)
+    search_fields = ("source_product__name", "sale__number")
 
 
 @admin.register(StockMovement)

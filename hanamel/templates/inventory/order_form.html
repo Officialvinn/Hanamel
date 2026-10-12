@@ -1,22 +1,35 @@
 {% extends "base.html" %}
+{% load money %}
 {% block title %}New custom order — Hanamel{% endblock %}
 {% block css %}
-.formwrap{max-width:560px}
+.formwrap{max-width:680px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 textarea{font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px solid var(--rule);
-  border-radius:var(--r);width:100%;min-height:90px;resize:vertical}
+  border-radius:var(--r);width:100%;min-height:70px;resize:vertical}
 .deposit-box{border:1px solid var(--rule);border-radius:var(--r);padding:16px;
   margin-top:6px;background:#FBFDFC}
 .deposit-box .lead{font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;
   text-transform:uppercase;color:var(--ink-soft);margin-bottom:12px}
-@media (max-width:560px){.row2{grid-template-columns:1fr}}
+.itemrow{border:1px solid var(--rule);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.itemrow .grid{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px}
+.itemrow .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.itemrow input{padding:8px 10px;font-size:.92rem;width:100%}
+.itemrow .amt{display:flex;justify-content:space-between;align-items:center;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
+.itemrow .amt .v{font-family:var(--mono);font-weight:600}
+.itemrow .rm{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:.8rem}
+.itemrow .rm:hover{color:var(--oxide)}
+.itemstotal{display:flex;justify-content:space-between;align-items:baseline;
+  padding:12px 14px;border-top:2px solid var(--ink);margin-bottom:18px}
+.itemstotal .v{font-family:var(--mono);font-size:1.3rem;font-weight:600}
+@media (max-width:560px){.row2,.itemrow .grid,.itemrow .grid3{grid-template-columns:1fr}}
 {% endblock %}
 
 {% block content %}
 <h1>New custom order</h1>
 <p class="sub">For made-to-order work — doors, frames, tables, custom cuts.</p>
 
-<form method="post" enctype="multipart/form-data" class="formwrap">
+<form method="post" enctype="multipart/form-data" class="formwrap" id="orderform">
   {% csrf_token %}
   <div class="row2">
     <div class="field">
@@ -30,15 +43,25 @@ textarea{font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px sol
   </div>
 
   <div class="field">
-    <label for="desc">What are they ordering?</label>
-    <textarea id="desc" name="description" placeholder="e.g. Mahogany panel door, 3ft x 7ft, with frame" required>{{ form.description|default:'' }}</textarea>
+    <label for="desc">Overview <span style="text-transform:none;letter-spacing:0">(optional — the priced items below carry the detail)</span></label>
+    <textarea id="desc" name="description" placeholder="e.g. Mahogany panel doors for the front entrance">{{ form.description|default:'' }}</textarea>
+  </div>
+
+  <label style="display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;
+         text-transform:uppercase;color:var(--ink-soft);margin:18px 0 10px">Priced line items</label>
+  <div id="itemrows"></div>
+  <button type="button" class="btn btn-ghost" id="additem" style="margin-bottom:10px">+ Add line item</button>
+  <div class="itemstotal">
+    <span class="k" style="font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+          text-transform:uppercase;color:var(--ink-soft)">Total from items</span>
+    <span class="v" id="itemstotal">KSh 0.00</span>
   </div>
 
   <div class="row2">
     <div class="field">
-      <label for="qp">Quoted price (KSh)</label>
+      <label for="qp">Flat quoted price (KSh) <span style="text-transform:none;letter-spacing:0">(only if no line items above)</span></label>
       <input type="number" id="qp" name="quoted_price" step="0.01" min="0"
-             value="{{ form.quoted_price|default:'' }}" required>
+             value="{{ form.quoted_price|default:'' }}">
     </div>
     <div class="field">
       <label for="td">Ready by <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
@@ -85,6 +108,63 @@ textarea{font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px sol
   var m = document.getElementById('dm'), box = document.getElementById('depmpesa');
   function sync(){ box.style.display = m.value === 'mpesa' ? '' : 'none'; }
   m.addEventListener('change', sync); sync();
+})();
+
+(function(){
+  var rows = document.getElementById('itemrows');
+  var addBtn = document.getElementById('additem');
+  var totalEl = document.getElementById('itemstotal');
+  var n = 0;
+
+  function money(v){
+    return 'KSh ' + v.toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  function recalcTotal(){
+    var total = 0;
+    rows.querySelectorAll('.itemrow').forEach(function(row){
+      var qty = parseFloat(row.querySelector('.f-qty').value) || 0;
+      var price = parseFloat(row.querySelector('.f-price').value) || 0;
+      var amt = qty * price;
+      row.querySelector('.amtval').textContent = money(amt);
+      total += amt;
+    });
+    totalEl.textContent = money(total);
+  }
+
+  function addRow(){
+    n++;
+    var row = document.createElement('div');
+    row.className = 'itemrow';
+    row.innerHTML =
+      '<div class="grid">' +
+        '<div><label style="font-size:.68rem;color:var(--ink-soft)">Description</label>' +
+          '<input type="text" name="item_description" placeholder="e.g. Mahogany finished door set" class="f-desc"></div>' +
+        '<div><label style="font-size:.68rem;color:var(--ink-soft)">Detail (optional)</label>' +
+          '<input type="text" name="item_detail" placeholder="e.g. Hinges 8pcs, Locks, Labour" class="f-detail"></div>' +
+      '</div>' +
+      '<div class="grid3">' +
+        '<div><label style="font-size:.68rem;color:var(--ink-soft)">Qty</label>' +
+          '<input type="number" name="item_qty" min="0" step="0.5" value="1" class="f-qty"></div>' +
+        '<div><label style="font-size:.68rem;color:var(--ink-soft)">Unit</label>' +
+          '<input type="text" name="item_unit" placeholder="pcs / sets / hrs" value="pcs" class="f-unit"></div>' +
+        '<div><label style="font-size:.68rem;color:var(--ink-soft)">Unit price (KSh)</label>' +
+          '<input type="number" name="item_unit_price" min="0" step="0.01" class="f-price"></div>' +
+      '</div>' +
+      '<div class="amt"><span>Amount</span>' +
+        '<span><span class="v amtval">KSh 0.00</span> ' +
+        '<button type="button" class="rm">Remove</button></span></div>';
+    rows.appendChild(row);
+    row.querySelectorAll('.f-qty, .f-price').forEach(function(el){
+      el.addEventListener('input', recalcTotal);
+    });
+    row.querySelector('.rm').addEventListener('click', function(){
+      row.remove(); recalcTotal();
+    });
+  }
+
+  addBtn.addEventListener('click', addRow);
+  addRow();   // start with one row so the form isn't empty
 })();
 </script>
 {% endblock %}

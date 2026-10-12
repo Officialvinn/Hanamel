@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ order.number }} — Quotation{% endblock %}
+{% block css %}{% include "inventory/_quote_css.html" %}{% endblock %}
+
+{% block content %}
+<div class="actions noprint">
+  <a href="{% url 'order_detail' order.pk %}" class="btn btn-ghost">Back</a>
+  <button type="button" class="btn" onclick="window.print()">Print / Save PDF</button>
+</div>
+
+{% include "inventory/_quote_body.html" %}
+{% endblock %}
