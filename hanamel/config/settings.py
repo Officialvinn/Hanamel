@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,18 +23,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# In production set DJANGO_SECRET_KEY as an environment variable.
-# The fallback is for local development only and must never be used live.
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-local-dev-key-do-not-use-in-production",
-)
-
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG is off unless DJANGO_DEBUG says otherwise, so a missing env var
 # on the server can never accidentally leak tracebacks.
-DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
+# Local development: export DJANGO_DEBUG=True
+DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
+
+# SECURITY WARNING: keep the secret key used in production secret!
+# Required whenever DEBUG is off; the fallback is for local development only.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is not True")
+    SECRET_KEY = "django-insecure-local-dev-key-do-not-use-in-production"
 
 # Add your server's hostname/IP here before deploying.
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
@@ -149,13 +152,25 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
+    # Start short; raise to 31536000 (a year) once HTTPS is confirmed working.
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "3600"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = "/accounts/login/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
-# Uploaded files (product photos, custom-order references). Kept OUTSIDE the
-# repo so a git pull never touches them, and served by nginx in production.
+# Uploaded files (business logo, custom-order photos). In production set
+# DJANGO_MEDIA_ROOT to a folder OUTSIDE the repo (e.g. /var/lib/hanamel/media)
+# so a git pull never touches them; nginx serves them. Locally they fall back
+# to the repo's media/ folder, which is git-ignored.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.environ.get("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media"))
+
+# Send warnings and errors (including 500 tracebacks) to stderr, which
+# gunicorn hands to journald: `journalctl -u hanamel`.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "WARNING"},
+}
