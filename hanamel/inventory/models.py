@@ -88,6 +88,8 @@ class Product(models.Model):
     door_height = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
     door_width = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
     door_thickness = models.PositiveIntegerField(null=True, blank=True, help_text="mm")
+    photo = models.ImageField(upload_to="doors/", null=True, blank=True,
+                              help_text="Shown on the Doors page. Doors only.")
 
     # --- conversion constants (change these if the yard's units differ) ---
     INCH_TO_M = Decimal("0.0254")
@@ -150,6 +152,14 @@ class Product(models.Model):
         if self.type != self.DOOR or not (self.door_height and self.door_width):
             return ""
         return f"≈ {_feet_inches(self.door_height)} × {_feet_inches(self.door_width)}"
+
+    @property
+    def door_size_inches(self):
+        """'32" × 80"' — width × height in whole inches, how customers ask."""
+        if self.type != self.DOOR or not (self.door_height and self.door_width):
+            return ""
+        w, h = (round(Decimal(v) / Decimal("25.4")) for v in (self.door_width, self.door_height))
+        return f'{w}" × {h}"'
 
     @property
     def door_icon_px(self):

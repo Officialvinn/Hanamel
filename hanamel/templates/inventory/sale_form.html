@@ -532,6 +532,10 @@ h2.species::after{content:"";flex:1;height:1px;background:var(--rule)}
     }
   };
 
+  // ?add=<id> (e.g. "Sell" on the Doors page) starts the sale with that item
+  var pre = parseInt(new URLSearchParams(location.search).get('add'), 10);
+  if (CAT[pre] && CAT[pre].stock >= 1) cart.push({id: pre, qty: 1});
+
   render();
 })();
 </script>

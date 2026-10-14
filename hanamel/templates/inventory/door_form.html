@@ -21,6 +21,12 @@
 .opt{text-transform:none;letter-spacing:0}
 .check{display:flex;gap:10px;align-items:center;font-size:.92rem;margin:8px 0 0}
 .check input{width:auto}
+.photobox{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:center;
+  border:1px solid var(--rule);border-radius:var(--r);padding:14px;margin-bottom:18px;background:#FBFDFC}
+.photobox .thumb{width:110px;aspect-ratio:3/4;border-radius:var(--r);border:1px solid var(--rule);
+  background:var(--mark-soft) center/cover no-repeat;display:flex;align-items:center;
+  justify-content:center;color:var(--ink-soft);font-size:.72rem;text-align:center}
+.photobox .field{margin:0}
 @media (max-width:560px){.row2,.row3,.sizebox{grid-template-columns:1fr}
   .preview{order:-1}}
 {% endblock %}
@@ -30,7 +36,7 @@
 <p class="sub">{% if door %}Stock changes go through <a href="{% url 'stock_update' %}">Update stock</a>.
   {% else %}One entry per size you keep in stock.{% endif %}</p>
 
-<form method="post" class="formwrap">
+<form method="post" class="formwrap" enctype="multipart/form-data">
   {% csrf_token %}
   <div class="row2">
     <div class="field">
@@ -82,8 +88,9 @@
         </div>
       </div>
       <div class="field">
-        <label for="th">Thickness (mm)</label>
+        <label for="th">Thickness (mm) <span class="opt">(optional)</span></label>
         <select id="th" name="thickness">
+          <option value="">Not specified</option>
           {% for t in thicknesses %}<option value="{{ t }}">{{ t }} mm{% if t == 35 %} — interior{% elif t == 40 %} — heavy interior{% elif t == 45 %} — exterior{% endif %}</option>{% endfor %}
         </select>
       </div>
@@ -111,6 +118,22 @@
       <label for="ls">Low-stock alert at</label>
       <input type="number" id="ls" name="low_stock_threshold" min="0" step="1"
              value="{{ values.low_stock_threshold }}">
+    </div>
+  </div>
+
+  <div class="photobox">
+    <div class="thumb" id="thumb"
+         {% if door.photo %}style="background-image:url('{{ door.photo.url }}')"{% endif %}>
+      {% if not door.photo %}<span id="nothumb">No photo</span>{% endif %}</div>
+    <div>
+      <div class="field">
+        <label for="ph">Photo <span class="opt">(optional — shown on the Doors page)</span></label>
+        <input type="file" id="ph" name="photo" accept="image/*">
+      </div>
+      {% if door.photo %}
+      <label class="check"><input type="checkbox" name="remove_photo"> Remove current photo</label>
+      {% endif %}
+      <div class="hint">Big phone photos are shrunk automatically.</div>
     </div>
   </div>
 
@@ -157,6 +180,13 @@
     pv.classList.toggle('dbl', W >= 1200);
     pvdim.innerHTML = H + ' × ' + W + ' mm<br>≈ ' + ftin(H) + ' × ' + ftin(W);
   }
+  var ph = document.getElementById('ph'), thumb = document.getElementById('thumb');
+  ph.addEventListener('change', function(){
+    if (!ph.files || !ph.files[0]) return;
+    thumb.style.backgroundImage = 'url(' + URL.createObjectURL(ph.files[0]) + ')';
+    var n = document.getElementById('nothumb'); if (n) n.remove();
+  });
+
   [size, h, w].forEach(function(el){ el.addEventListener('input', sync);
                                       el.addEventListener('change', sync); });
   sync();

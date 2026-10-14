@@ -756,7 +756,10 @@ class DoorTests(TestCase):
         for url in [reverse("door_list"), reverse("door_create"),
                     reverse("door_edit", args=[d.pk])]:
             self.assertEqual(self.client.get(url).status_code, 200, url)
-        self.assertContains(self.client.get(reverse("door_list")), "2100 × 900 mm")
+        r = self.client.get(reverse("door_list"))
+        self.assertContains(r, "900 × 2100 mm")
+        self.assertContains(r, 'KSh 25,000')
+        self.assertContains(r, reverse("order_create"))      # custom doors route
 
     def test_add_standard_size_logs_opening_stock(self):
         self.client.post(reverse("door_create"), {
@@ -793,6 +796,14 @@ class DoorTests(TestCase):
         self.assertEqual(d.price, Decimal("27000"))
         self.assertEqual(d.stock_qty, Decimal("4"))
 
+    def test_sell_button_only_when_in_stock(self):
+        d = self.make_door()
+        gone = self.make_door(name="Flush door", stock_qty=Decimal("0"))
+        r = self.client.get(reverse("door_list"))
+        self.assertContains(r, f'{reverse("sale_create")}?add={d.pk}"')
+        self.assertNotContains(r, f'?add={gone.pk}"')
+        self.assertContains(r, "Out of stock")
+
     def test_selling_a_door(self):
         d = self.make_door()
         self.assertContains(self.client.get(reverse("sale_create")), "Doors")
@@ -803,3 +814,74 @@ class DoorTests(TestCase):
         self.assertIsNone(item.board_feet_per_piece)
         d.refresh_from_db()
         self.assertEqual(d.stock_qty, Decimal("2"))
+
+
+    def test_inch_size_matches_how_customers_ask(self):
+        d = self.make_door(door_height=2032, door_width=813)
+        self.assertEqual(d.door_size_inches, '32" × 80"')
+
+    def test_thickness_is_optional(self):
+        self.client.post(reverse("door_create"), {
+            "name": "Panel door", "size": "2032x813", "thickness": "",
+            "price": "35000"})
+        d = Product.objects.get(type=Product.DOOR)
+        self.assertIsNone(d.door_thickness)
+        self.assertEqual(self.client.get(reverse("door_edit", args=[d.pk])).status_code, 200)
+
+
+class DoorPhotoTests(TestCase):
+    def setUp(self):
+        import tempfile
+        from django.test import override_settings
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+        User.objects.create_user("yardstaff", password="pw12345!")
+        self.client.login(username="yardstaff", password="pw12345!")
+
+    def tearDown(self):
+        import shutil
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def png(self, w, h):
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        buf = BytesIO()
+        Image.new("RGB", (w, h), (200, 140, 100)).save(buf, "PNG")
+        return SimpleUploadedFile("door.png", buf.getvalue(), content_type="image/png")
+
+    def post(self, **extra):
+        data = {"name": "Panel door", "species": "Mahogany", "size": "2032x813",
+                "thickness": "40", "price": "35000"}
+        data.update(extra)
+        return self.client.post(reverse("door_create"), data)
+
+    def test_photo_is_saved_as_a_shrunk_jpeg(self):
+        from PIL import Image
+        self.post(photo=self.png(1800, 2400))
+        d = Product.objects.get(type=Product.DOOR)
+        self.assertTrue(d.photo.name.endswith(".jpg"))
+        with Image.open(d.photo.path) as img:
+            self.assertEqual(img.format, "JPEG")
+            self.assertLessEqual(max(img.size), 1400)
+        self.assertContains(self.client.get(reverse("door_list")), d.photo.url)
+
+    def test_non_image_is_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.post(photo=SimpleUploadedFile("door.png", b"not an image"))
+        self.assertFalse(Product.objects.filter(type=Product.DOOR).exists())
+
+    def test_photo_can_be_replaced_and_removed(self):
+        import os
+        self.post(photo=self.png(300, 400))
+        d = Product.objects.get(type=Product.DOOR)
+        first = d.photo.path
+        edit = {"name": "Panel door", "size": "2032x813", "thickness": "40", "price": "35000"}
+        self.client.post(reverse("door_edit", args=[d.pk]), {**edit, "photo": self.png(300, 400)})
+        d.refresh_from_db()
+        self.assertFalse(os.path.exists(first))          # old file cleaned up
+        self.client.post(reverse("door_edit", args=[d.pk]), {**edit, "remove_photo": "on"})
+        d.refresh_from_db()
+        self.assertFalse(d.photo)

@@ -167,8 +167,8 @@ def door_list(request):
     doors = _doors(Product.objects.filter(type=Product.DOOR, is_active=True))
     return render(request, "inventory/door_list.html", {
         "doors": doors,
-        "in_stock": sum((d.stock_qty for d in doors), Decimal("0")),
-        "stock_value": sum((d.stock_qty * (d.price or 0) for d in doors), Decimal("0")),
+        "open_orders": CustomOrder.objects.filter(
+            status__in=CustomOrder.OPEN_STATUSES).count(),
         "page": "doors"})
 
 
@@ -178,8 +178,32 @@ def _door_initial(door):
         return {"thickness": "40", "opening_stock": "0", "low_stock_threshold": "2"}
     return {"name": door.name, "species": door.species,
             "height": door.door_height, "width": door.door_width,
-            "thickness": door.door_thickness, "price": f"{door.price.normalize():f}",
+            "thickness": door.door_thickness or "", "price": f"{door.price.normalize():f}",
             "low_stock_threshold": f"{door.low_stock_threshold.normalize():f}"}
+
+
+DOOR_PHOTO_MAX_PX = 1400
+
+
+def _door_photo(upload):
+    """Check an upload really is an image and shrink it to a phone-friendly
+    JPEG (phone photos are often 3-8 MB). Returns (ContentFile, None) or
+    (None, error message)."""
+    from io import BytesIO
+
+    from django.core.files.base import ContentFile
+    from PIL import Image, ImageOps, UnidentifiedImageError
+
+    try:
+        img = Image.open(upload)
+        img.load()
+    except (UnidentifiedImageError, OSError):
+        return None, "That photo isn't an image file we can read (use JPG or PNG)."
+    img = ImageOps.exif_transpose(img).convert("RGB")   # respect phone rotation
+    img.thumbnail((DOOR_PHOTO_MAX_PX, DOOR_PHOTO_MAX_PX))
+    out = BytesIO()
+    img.save(out, "JPEG", quality=85, optimize=True)
+    return ContentFile(out.getvalue()), None
 
 
 @login_required
@@ -222,7 +246,7 @@ def door_form(request, pk=None):
         else:
             height = whole("height", "Height")
             width = whole("width", "Width")
-        thickness = whole("thickness", "Thickness")
+        thickness = whole("thickness", "Thickness", required=False)
         price = whole("price", "Price")
         threshold = whole("low_stock_threshold", "Low-stock alert", required=False)
         opening = whole("opening_stock", "Opening stock", required=False) if not door else None
@@ -233,6 +257,12 @@ def door_form(request, pk=None):
             if value is not None and not lo <= value <= hi:
                 errors.append(f"{label} should be between {lo} and {hi} mm.")
 
+        photo = None
+        if request.FILES.get("photo"):
+            photo, problem = _door_photo(request.FILES["photo"])
+            if problem:
+                errors.append(problem)
+
         if errors:
             for e in errors:
                 messages.error(request, e)
@@ -241,7 +271,7 @@ def door_form(request, pk=None):
                 door = door or Product(type=Product.DOOR)
                 door.name, door.species = name, species
                 door.door_height, door.door_width = int(height), int(width)
-                door.door_thickness = int(thickness)
+                door.door_thickness = int(thickness) if thickness else None
                 door.price = price
                 if threshold is not None:
                     door.low_stock_threshold = threshold
@@ -251,6 +281,13 @@ def door_form(request, pk=None):
                 is_new = door.pk is None
                 if is_new and opening:
                     door.stock_qty = opening
+                if photo or form.get("remove_photo") == "on":
+                    if door.photo:
+                        door.photo.delete(save=False)
+                    if photo:
+                        slug = "-".join(f"{door.species} {name}".lower().split())[:40]
+                        door.photo.save(f"{slug}-{door.door_height}x{door.door_width}.jpg",
+                                        photo, save=False)
                 door.save()
                 if is_new and opening:
                     StockMovement.objects.create(
