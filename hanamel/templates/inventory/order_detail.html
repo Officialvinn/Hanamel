@@ -3,6 +3,7 @@
 {% block title %}{{ order.number }} — Hanamel{% endblock %}
 {% block css %}
 .grid{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start}
+.grid > *{min-width:0}
 .stat-pill{display:inline-block;font-family:var(--mono);font-size:.66rem;font-weight:600;
   letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:2px}
 .st-quoted{background:#EEF2F7;color:#3B5573}
@@ -49,14 +50,14 @@ select,.side input{width:100%;padding:9px 10px;font-size:1rem}
       {% if order.description %}<div class="desc">{{ order.description }}</div>{% endif %}
       {% if order.items.all %}
       <div class="table-wrap" style="margin-top:14px">
-      <table>
-        <tr><th>Description</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th></tr>
+      <table class="stack">
+        <tr class="hdr"><th>Description</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th></tr>
         {% for it in order.items.all %}
         <tr>
           <td>{{ it.description }}{% if it.detail %}<div class="meta">{{ it.detail }}</div>{% endif %}</td>
-          <td class="r num">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
-          <td class="r num">{{ it.unit_price|amount }}</td>
-          <td class="r num">{{ it.amount|amount }}</td>
+          <td class="r num" data-label="Qty">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
+          <td class="r num" data-label="Unit price">{{ it.unit_price|amount }}</td>
+          <td class="r num" data-label="Amount">{{ it.amount|amount }}</td>
         </tr>
         {% endfor %}
       </table>

@@ -34,6 +34,8 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
 a{color:var(--mark);text-decoration:none}
 a:hover{text-decoration:underline}
 :focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+[hidden]{display:none!important}
+img,video{max-width:100%;height:auto}
 
 /* ---- chrome ---- */
 .topbar{background:var(--bar);border-bottom:1px solid var(--rule);padding:0 20px;
@@ -121,10 +123,14 @@ tr:last-child td{border-bottom:none}
 .pill-low{background:var(--oxide-soft);color:var(--oxide)}
 
 /* ---- forms ---- */
-input[type=text],input[type=number],input[type=password],select{
+input[type=text],input[type=number],input[type=password],input[type=email],input[type=tel],
+input[type=search],input[type=date],input[type=url],select,textarea{
   font-family:var(--sans);font-size:1rem;padding:11px 12px;border:1px solid var(--rule);
   border-radius:var(--r);background:#fff;color:var(--ink);width:100%}
 input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+input[type=date]{min-height:46px}
+input[type=file]{font-family:var(--sans);font-size:.92rem;width:100%;padding:10px;
+  border:1px dashed var(--rule);border-radius:var(--r);background:#fff}
 label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;
   text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;font-weight:600}
 .field{margin-bottom:18px}
@@ -152,10 +158,12 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
 
   .topbar nav{position:fixed;top:0;right:0;bottom:0;width:82vw;max-width:300px;
     display:flex;flex-direction:column;gap:0;flex-wrap:nowrap;overflow-x:visible;
-    overflow-y:auto;background:var(--card);box-shadow:-10px 0 30px rgba(24,32,40,.2);
-    transform:translateX(100%);transition:transform .25s ease;z-index:40;
+    overflow-y:auto;background:var(--card);
+    transform:translateX(100%);visibility:hidden;box-shadow:none;
+    transition:transform .25s ease,visibility 0s linear .25s;z-index:40;
     padding:calc(10px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom))}
-  .topbar nav.open{transform:translateX(0)}
+  .topbar nav.open{transform:translateX(0);visibility:visible;
+    box-shadow:-10px 0 30px rgba(24,32,40,.2);transition:transform .25s ease}
   .navhead{display:flex;justify-content:flex-end;padding:0 10px 4px}
   .navclosebtn{background:none;border:none;color:var(--ink-soft);cursor:pointer;
     font-size:1.6rem;line-height:1;width:40px;height:40px}
@@ -167,6 +175,22 @@ label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.11e
     background:#FBFDFC}
   body.nav-open{overflow:hidden}
   .wrap{padding:20px 14px 60px}
+  input,select,textarea{font-size:16px!important}
+
+  /* table.stack: each row becomes a block — first cell full width, the rest
+     as labelled figures underneath (labels from data-label). */
+  table.stack,table.stack tbody{display:block}
+  table.stack tr.hdr{display:none}
+  table.stack tr{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 18px;
+    padding:12px 2px;border-bottom:1px solid var(--rule)}
+  table.stack td{display:block;padding:0;border:none;text-align:left;white-space:nowrap}
+  table.stack td:first-child{flex:1 0 100%;white-space:normal}
+  table.stack td:last-child{margin-left:auto;text-align:right;font-weight:600}
+  table.stack td[data-label]::before{content:attr(data-label);display:block;
+    font-family:var(--mono);font-size:.64rem;font-weight:500;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px;white-space:nowrap}
+  .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .head{flex-wrap:wrap;gap:12px}
   .hide-sm{display:none}
   th,td{padding:9px 8px;font-size:.82rem}
   .cs{width:62px}

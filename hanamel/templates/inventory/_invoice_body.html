@@ -26,8 +26,9 @@
     <div class="v">{{ sale.customer_name|default:"Walk-in customer" }}</div>
   </div>
 
-  <table>
-    <tr>
+  <div class="doc-tw">
+  <table class="stack">
+    <tr class="hdr">
       <th>Description</th>
       <th class="r">Board feet</th>
       <th class="r">Rate/bd ft (KSh)</th>
@@ -37,13 +38,14 @@
     {% for it in sale.items.all %}
     <tr>
       <td>{{ it.label }}</td>
-      <td class="r num">{{ it.board_feet_per_piece|default:"—" }}</td>
-      <td class="r num">{{ it.rate|amount }}</td>
-      <td class="r num">{{ it.qty|floatformat:0 }}</td>
-      <td class="r num">{{ it.amount|amount }}</td>
+      <td class="r num" data-label="Bd ft">{{ it.board_feet_per_piece|default:"—" }}</td>
+      <td class="r num" data-label="Rate">{{ it.rate|amount }}</td>
+      <td class="r num" data-label="Qty">{{ it.qty|floatformat:0 }}</td>
+      <td class="r num" data-label="Amount">{{ it.amount|amount }}</td>
     </tr>
     {% endfor %}
   </table>
+  </div>
 
   <div class="sums">
     <div><span>Total</span><span class="num">{{ sale.total|amount }}</span></div>

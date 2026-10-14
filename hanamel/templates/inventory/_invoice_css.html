@@ -29,6 +29,19 @@
 .foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--rule);
   font-size:.78rem;color:var(--ink-soft);line-height:1.6}
 .actions{max-width:800px;margin:0 auto 18px;display:flex;gap:10px;justify-content:flex-end}
+.doc-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+@media screen and (max-width:640px){
+  .doc{padding:20px 16px}
+  .doc-head{flex-direction:column;gap:14px}
+  .doc-kind{text-align:left}
+  .biz-name{font-size:1.15rem}
+  .doc td,.doc th{padding:8px 6px;font-size:.82rem}
+  .doc th{font-size:.66rem;letter-spacing:.05em}
+  .sums{width:100%}
+  .actions{justify-content:stretch}
+  .actions .btn{flex:1;text-align:center}
+}
 
 @media print{
   .topbar,.actions,.noprint{display:none!important}

@@ -59,6 +59,29 @@
   border-top:1px solid var(--rule);padding-top:12px}
 .qfoot em{font-style:italic}
 
+.q-tw{position:relative;z-index:1;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.actions{max-width:800px;margin:0 auto 18px;display:flex;gap:10px;justify-content:flex-end}
+
+@media screen and (max-width:640px){
+  .qdoc{padding:26px 16px 24px}
+  .qcorner-tr{width:150px;height:110px}
+  .qcorner-bl{width:130px;height:90px}
+  .qtitle{font-size:1.6rem}
+  .qlogo{max-width:110px;max-height:50px}
+  .qrefs{text-align:left}
+  /* items stack (table.stack in base.html); row number hidden on phones */
+  .qtable .qnum{display:none}
+  .qtable td.qd{flex:1 0 100%;white-space:normal}
+  .qtable td{font-size:.9rem;background:none!important}
+  .qtable tr:nth-child(even){background:var(--q-row-alt)}
+  table.qtable tr{padding:12px 10px}
+  .qtable .qdetail{font-size:.78rem;white-space:normal}
+  .qtotal{justify-content:stretch}
+  .qtotal-box{flex:1;justify-content:space-between;gap:12px;padding:12px 16px}
+  .actions{justify-content:stretch}
+  .actions .btn{flex:1;text-align:center}
+}
+
 @media print{
   .topbar,.actions,.noprint{display:none!important}
   body{background:#fff}

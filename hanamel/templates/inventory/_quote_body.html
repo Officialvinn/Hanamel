@@ -23,19 +23,21 @@
   </div>
 
   {% if order.items.all %}
-  <table class="qtable">
-    <tr><th>#</th><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr>
+  <div class="q-tw">
+  <table class="qtable stack">
+    <tr class="hdr"><th>#</th><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr>
     {% for it in order.items.all %}
     <tr>
       <td class="qnum">{{ forloop.counter }}</td>
-      <td><div class="qdesc">{{ it.description }}</div>
+      <td class="qd"><div class="qdesc">{{ it.description }}</div>
         {% if it.detail %}<div class="qdetail">{{ it.detail }}</div>{% endif %}</td>
-      <td class="r">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
-      <td class="r">{{ it.unit_price|amount:0 }}</td>
-      <td class="r qamt">{{ it.amount|amount:0 }}</td>
+      <td class="r" data-label="Qty">{{ it.qty|floatformat:-2 }} {{ it.unit }}</td>
+      <td class="r" data-label="Unit price">{{ it.unit_price|amount:0 }}</td>
+      <td class="r qamt" data-label="Amount">{{ it.amount|amount:0 }}</td>
     </tr>
     {% endfor %}
   </table>
+  </div>
   {% elif order.description %}
   <p style="position:relative;z-index:1;white-space:pre-wrap;line-height:1.6">{{ order.description }}</p>
   {% endif %}

@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% load money %}
 {% block title %}Reports — Hanamel{% endblock %}
+{% block css %}
+.dl-btns{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
+.dl-btns .btn{padding:7px 13px;font-size:.83rem}
+@media (max-width:640px){
+  table.stack tr{padding:14px 16px}
+  table.stack td.dl{flex:1 0 100%;margin-left:0}
+  .dl-btns{justify-content:stretch}
+  .dl-btns .btn{flex:1}
+}
+{% endblock %}
+
 {% block content %}
 <h1>Monthly books</h1>
 <p class="sub">Download a month's sales as a spreadsheet for your accountant.</p>
@@ -8,18 +19,18 @@
 <div class="panel">
 {% if months %}
 <div class="table-wrap">
-<table>
-  <tr><th>Month</th><th class="r">Sales</th><th class="r">Total (KSh)</th><th class="r">Download</th></tr>
+<table class="stack">
+  <tr class="hdr"><th>Month</th><th class="r">Sales</th><th class="r">Total (KSh)</th><th class="r">Download</th></tr>
   {% for m in months %}
   <tr>
     <td><strong>{{ m.m|date:"F Y" }}</strong></td>
-    <td class="r num">{{ m.n }}</td>
-    <td class="r num">{{ m.total|amount }}</td>
-    <td class="r">
-      <div style="display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap">
-        <a class="btn btn-ghost" style="padding:7px 13px;font-size:.83rem"
+    <td class="r num" data-label="Sales">{{ m.n }}</td>
+    <td class="r num" data-label="Total (KSh)">{{ m.total|amount }}</td>
+    <td class="r dl">
+      <div class="dl-btns">
+        <a class="btn btn-ghost"
            href="{% url 'export_month' m.m|date:'Y' m.m|date:'n' %}">Spreadsheet</a>
-        <a class="btn btn-ghost" style="padding:7px 13px;font-size:.83rem"
+        <a class="btn btn-ghost"
            href="{% url 'invoice_pack' m.m|date:'Y' m.m|date:'n' %}">Invoices</a>
       </div>
     </td>
